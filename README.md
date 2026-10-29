@@ -3,7 +3,7 @@
 A self-hosted device-management platform for Android, with a browser dashboard and
 optional remote-assistance agents for Windows and Linux.
 
-SentinelMDM is built around a **device-owner Android agent**, a **/administrator
+SentinelMDM is built around a **device-owner Android agent**, a **administrator
 web dashboard**, and a **self-hosted server**. No third-party control plane is required:
 you run the server, you hold the keys, and the device data stays on infrastructure you
 control.
