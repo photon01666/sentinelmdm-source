@@ -37,7 +37,7 @@ Read from the environment at runtime:
 | Variable | Purpose |
 | :--- | :--- |
 | `SENTINEL_SERVER_URL` | Control server base URL. |
-| `SENTINEL_BASTION_HOST` | Bastion host for the Hop-1 `HostKeyAlias`. |
+| `SENTINEL_BASTION_HOST` | Support endpoint host for the Hop-1 `HostKeyAlias`. |
 | `SENTINEL_BASTION_KNOWN_HOSTS` | Pinned `[host]:port ssh-ed25519 ...` line. |
 | `SENTINEL_REALITY_NODES` / `_V6` / `_SNIS` | REALITY node and SNI lists. |
 | `SENTINEL_REALITY_PUBLIC_KEY` / `_SHORT_ID` / `_CONTROL_UUID` | REALITY credentials. |
@@ -45,8 +45,7 @@ Read from the environment at runtime:
 Empty REALITY values disable the tunnel and fall back to a direct connection. See
 [`../docs/CONFIGURATION.md`](../docs/CONFIGURATION.md).
 
-The bastion server itself is **not** part of this repository. Point the agent at a
-compatible bastion you operate.
+Point the agent at a compatible support endpoint you operate.
 
 ## License
 

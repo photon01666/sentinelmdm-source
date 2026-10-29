@@ -12,7 +12,7 @@ sentineld/
 ├── internal/config/          build/runtime constants and env overrides
 ├── internal/enroll/          credential and ticket enrollment
 ├── internal/controlchannel/  Socket.IO control channel and device identity
-├── internal/hop1/            reverse SSH tunnel to the bastion
+├── internal/hop1/            reverse SSH tunnel to the support endpoint
 ├── internal/xraytransport/   embedded xray-core (VLESS/REALITY)
 ├── internal/arpwatch/        ARP/neighbour discovery
 └── internal/zkwrap/          payload wrapping helpers
@@ -60,13 +60,13 @@ Install the units from `systemd/`:
 
 ## Configuration
 
-The server URL, REALITY credentials, node lists, and bastion pin are environment
+The server URL, REALITY credentials, node lists, and endpoint pin are environment
 variables:
 
 ```bash
 SENTINEL_SERVER_URL=https://app.example.com
-SENTINEL_BASTION_HOST=bastion.example.com
-SENTINEL_BASTION_KNOWN_HOSTS='[bastion.example.com]:22022 ssh-ed25519 AAAA...'
+SENTINEL_BASTION_HOST=support.example.com
+SENTINEL_BASTION_KNOWN_HOSTS='[support.example.com]:22 ssh-ed25519 AAAA...'
 SENTINEL_REALITY_NODES=203.0.113.10,203.0.113.11,203.0.113.12
 SENTINEL_REALITY_SNIS=www.microsoft.com
 SENTINEL_REALITY_PUBLIC_KEY=...
@@ -77,8 +77,7 @@ SENTINEL_REALITY_CONTROL_UUID=...
 Empty REALITY values disable the tunnel; the daemon then uses a direct connection. See
 [`../docs/CONFIGURATION.md`](../docs/CONFIGURATION.md).
 
-The bastion server is **not** part of this repository. Point the agent at a compatible
-bastion you operate.
+Point the agent at a compatible support endpoint you operate.
 
 ## IT audit
 

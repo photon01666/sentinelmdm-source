@@ -23,7 +23,7 @@ namespace SentinelRemoteAssist;
 ///
 /// The public half is sent to the server on every `register` (RemoteAssistSocket.cs) as
 /// `hop1PublicKey`; the server stores it on the device row and hands it to the bastion at provision
-/// time instead of looking up a shared account-level key — see bastion-web.py's
+/// time instead of looking up a shared account-level key — see the support service's
 /// `_create_remote_assist_session()`.
 /// </summary>
 internal static class Hop1Identity

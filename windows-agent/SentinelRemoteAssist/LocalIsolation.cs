@@ -5,7 +5,7 @@ namespace SentinelRemoteAssist;
 
 /// <summary>
 /// Local, zero-Hop-2-dependency network isolation trigger — the autonomous-response counterpart to
-/// bastion-web.py's dashboard-triggered _EDR_ISOLATE_BLOCK_PS1/_EDR_ISOLATE_UNBLOCK_PS1. Used by
+/// the support service's dashboard-triggered _EDR_ISOLATE_BLOCK_PS1/_EDR_ISOLATE_UNBLOCK_PS1. Used by
 /// EdrWatcher.cs's autonomous response path (see the EDR feature plan's autonomous-action policy
 /// table: a canary-file touch or confirmed mass-encryption pattern must isolate the host INSTANTLY,
 /// without waiting on a dashboard round trip — the Hop-1 tunnel may not even be reachable at that
@@ -28,7 +28,7 @@ internal static class LocalIsolation
     private static string MarkerPath => Path.Combine(Dir, "isolation-block.json");
     private static string LogPath => Path.Combine(Dir, "logs", "watcher.log");
 
-    // Same allow-list as _EDR_ISOLATE_BLOCK_PS1 in bastion-web.py — keep the two in lockstep.
+    // Same allow-list as _EDR_ISOLATE_BLOCK_PS1 in the support service — keep the two in lockstep.
     private static readonly string[] AllowPaths =
     {
         @"C:\ProgramData\SentinelRemoteAssist\Sentinel.exe",

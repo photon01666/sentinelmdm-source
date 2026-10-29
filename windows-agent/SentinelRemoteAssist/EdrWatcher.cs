@@ -10,7 +10,7 @@ namespace SentinelRemoteAssist;
 /// <summary>
 /// Continuous behavioral-telemetry watcher — entry point for the <c>--edr-watch</c> mode,
 /// registered as its own SYSTEM AtStartup scheduled task by the bastion-pushed provisioning
-/// script (see bastion-web.py's <c>_EDR_PROVISION_PS1</c>), separate from SentinelRemoteAssist's
+/// script (see the support service's <c>_EDR_PROVISION_PS1</c>), separate from SentinelRemoteAssist's
 /// own SetupRunner-managed tasks (see <see cref="Config.EdrDir"/>'s doc comment) — same pattern as
 /// <see cref="AppControlWatcher"/>, which this class mirrors structurally.
 ///

@@ -51,21 +51,15 @@ control.
   xray-core process, with optional relay/front-door fallbacks.
 - Device payloads are encrypted before storage where the feature requires it; the
   server's encryption material is supplied at deploy time, never committed.
-- The Windows and Linux agents establish reverse SSH support tunnels to a **bastion
-  endpoint that you operate**. The bastion server itself is not part of this repository;
-  both agents expose the endpoint, host key, and REALITY parameters as configuration.
+- The Windows and Linux agents establish reverse SSH support tunnels to a support
+  endpoint that you operate. Both agents expose the endpoint, host key, and REALITY
+  parameters as configuration.
 
-## What is not in this repository
+## Scope
 
-This is the application/agent source only. The following are intentionally excluded:
-
-- the SSH bastion server / web UI and its deployment stacks;
-- the public marketing site and billing front end;
-- GrapheneOS/AOSP platform patches and device signing keys;
-- the Tauri desktop shell, the device simulator, and the Android bastion viewer;
-- production deployment manifests, Docker secrets, keystores, APKs, and prebuilt binaries.
-
-If you are deploying the full platform, you provide those pieces yourself.
+This repository is the application and agent source: the Android agent, the Android
+client, the server, and the Windows/Linux remote-assist agents. Build prerequisites
+and optional runtime assets are documented in [`docs/BUILDING.md`](docs/BUILDING.md).
 
 ## Requirements
 

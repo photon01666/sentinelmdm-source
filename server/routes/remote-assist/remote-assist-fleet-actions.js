@@ -127,7 +127,7 @@ app.post('/api/remote-assist/fleet/arp-sweep-watch', requireUnlocked, requireAut
 
 // Arbitrary PowerShell across every controllable device at once. This is unrestricted remote code
 // execution on every enrolled Windows box — logged (truncated preview) for an audit trail given
-// the blast radius; see bastionClient.runPowerShell()/bastion-web.py's _run_powershell_over_hop2()
+// the blast radius; see bastionClient.runPowerShell()/the support service's _run_powershell_over_hop2()
 // for the transport (base64 -EncodedCommand, never a raw/interpolated string).
 app.post('/api/remote-assist/fleet/powershell', requireUnlocked, requireAuth, requireFleetAccess, async (req, res) => {
   const script = (req.body?.script || '').toString();

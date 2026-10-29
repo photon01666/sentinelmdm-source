@@ -8,16 +8,14 @@
 // 1 dep: db (binding L646).  The call must sit at or after L647; the earliest consumer of
 // the export is L3352, so at or before L3351.  L3330 satisfies both.
 //
-// REBASE note: The block lazily requires ./bastionClient — rebased to ../bastionClient
-// (bastionClient.js lives at the server root; verified resolvable from helpers/).
+// The block lazily requires the support client at the server root.
 
 module.exports = ({ db }) => {
-// Keeps the bastion's own display (session cards + Signal alert text) in sync with the
-// SentinelMDM device name — Windows Remote Assist devices only (Android devices have no bastion
-// session at all). Best-effort: never blocks the rename itself if bastion happens to be
-// unreachable at this exact moment — provisionSession() also re-pushes the current name on every
-// session create/reconnect (see bastionClient.js), so a missed push here self-heals the next
-// time the device connects. See bastion-web.py's display_name_for() doc comment.
+// Keeps the support service's display (session cards + alert text) in sync with the
+// SentinelMDM device name — Windows Remote Assist devices only (Android devices have no support
+// session at all). Best-effort: never blocks the rename itself if the support service is
+// unreachable at this exact moment — the session layer also re-pushes the current name on every
+// session create/reconnect, so a missed push here self-heals the next time the device connects.
 async function pushDeviceDisplayNameToBastion(deviceId, name) {
   const dev = (await db.prepare('SELECT platform, agent_kind FROM devices WHERE id=?').get(deviceId));
   if (!dev || dev.platform !== 'windows' || dev.agent_kind !== 'remote_assist') return;

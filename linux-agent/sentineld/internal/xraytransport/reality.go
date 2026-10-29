@@ -5,7 +5,7 @@
 // baked into the Windows client (`Config.cs`) and Android agent (`TransportManager.kt`/
 // `Prefs.realitySniCsv`) — they are documented there as public/non-secret ("safe to bake in like
 // the APK does"), confirmed against this repo's own live server config
-// (`swarm-stacks/sentinelmdm-ha.yml`, the xray service's REALITY inbound `command:` JSON) which
+// (`sentinelmdm-ha.yml`, the xray service's REALITY inbound `command:` JSON) which
 // shows the server-side `sni-dispatch`/`reality-ms`/`reality-decoy*` inbounds these dial into.
 package xraytransport
 
@@ -69,7 +69,7 @@ var (
 )
 
 // RealityNodes/RealitySnis — fleet REALITY node public IPs and their index-aligned per-node
-// camouflage SNI (CA, VA, OR). A single shared SNI is REJECTED on every node whose decoy `dest`
+// camouflage SNI (node A/B/C). A single shared SNI is REJECTED on every node whose decoy `dest`
 // differs (documented footgun, `xray-camouflage-pool.md`) — keep these two arrays index-aligned
 // with each other and in lockstep with the server's per-node dest/serverNames.
 var (
@@ -77,7 +77,7 @@ var (
 	RealitySnis  = envList("SENTINEL_REALITY_SNIS")
 )
 
-// RealityNodesV6 — index-aligned IPv6 literals for the SAME fleet nodes (CA, VA, OR), same
+// RealityNodesV6 — index-aligned IPv6 literals for the SAME fleet nodes (node A/B/C), same
 // public/non-secret posture as RealityNodes. Values are copied verbatim from the Android agent's
 // `reality_nodes_v6` default (Prefs.kt — the reference implementation, shipped 2.26.0.22) and
 // were re-verified live 2026-09-26: all three answer on [v6]:443 (TCP) alongside their v4

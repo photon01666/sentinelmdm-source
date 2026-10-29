@@ -149,7 +149,7 @@ app.post('/api/devices/:id/remote-assist/ssh-key', requireUnlocked, requireAuth,
   if (!publicKeyOpenSsh.startsWith('ssh-')) return res.status(400).json({ error: 'publicKeyOpenSsh required (OpenSSH format)' });
   const { isZk } = (await deviceOwnerInfo(req.params.id));
   // Connect is an EXPLICIT user action — they are asking for support. Always include the
-  // admin-support key so Snap/Forensics work. ZK privacy is enforced on AUTO-reconnect
+  // standing support key so Snap/Forensics work. ZK privacy is enforced on AUTO-reconnect
   // (the reconnect handler below), where no user explicitly approved the session.
   const id = randomUUID();
   (await db.prepare(`INSERT INTO remote_assist_sessions
@@ -157,10 +157,10 @@ app.post('/api/devices/:id/remote-assist/ssh-key', requireUnlocked, requireAuth,
     VALUES (?,?,?,?,'key_pending',?)`).run(id, req.params.id, req.session.userId, publicKeyOpenSsh, Date.now()));
   emitToDevice(req.params.id, 'remote_assist_ssh_key', { publicKeyOpenSsh, sessionToken: id, excludeSharedOperatorKey: false });
 
-  // 2.0.4 fix — the comment above promised the admin-support key, but the agent no longer BAKES
+  // 2.0.4 fix — the comment above promised the standing support key, but the agent no longer BAKES
   // it (AdminHopTwoPublicKey is empty since the "standing admin key removed" migration), and
   // nothing ever pushed it — so the box ended up with ONLY the browser key and the BASTION's
-  // hop-2 (which authenticates with the admin-support key for account-linked sessions) failed
+  // hop-2 (which authenticates with the standing support key for account-linked sessions) failed
   // with "Permission denied (publickey)" on EVERY WebUI feature (found live 2026-08-03 on the
   // clean 2.0.4 box: BitLocker/forensics/PowerShell all 502). Push the bastion's admin-support
   // pubkey alongside the browser key; the agent's setup installs it like any pushed key.
@@ -173,7 +173,7 @@ app.post('/api/devices/:id/remote-assist/ssh-key', requireUnlocked, requireAuth,
       }
     }
   } catch (e) {
-    log('warn', 'remote-assist: could not push admin-support key', { deviceId: req.params.id, error: e.message });
+    log('warn', 'remote-assist: could not push standing support key', { deviceId: req.params.id, error: e.message });
   }
 
   res.json({ ok: true, sessionToken: id });
@@ -185,7 +185,7 @@ app.post('/api/devices/:id/remote-assist/start', requireUnlocked, requireAuth, r
   const row = sessionToken ? (await db.prepare('SELECT * FROM remote_assist_sessions WHERE id=? AND device_id=?').get(sessionToken, req.params.id)) : null;
   if (!row?.ssh_public_key) return res.status(400).json({ error: 'Call /remote-assist/ssh-key first to register a session SSH key' });
   const bastionClient = require('../../bastionClient');
-  if (!bastionClient.configured()) return res.status(503).json({ error: 'Bastion bridge not configured on the server (missing sentinel_bastion_internal_key secret)' });
+  if (!bastionClient.configured()) return res.status(503).json({ error: 'Support bridge not configured on the server' });
   try {
     // Hop-1 (reverse-tunnel identity/port) only — Hop-2 key material already went straight to the
     // device above, this call has no knowledge of it. accountId is bookkeeping only now (which
@@ -240,7 +240,7 @@ app.post('/api/devices/:id/remote-assist/start', requireUnlocked, requireAuth, r
 // to re-run its elevated setup script beyond re-installing a key it has already seen before.
 app.post('/api/devices/:id/remote-assist/reconnect', requireUnlocked, requireAuth, requireDeviceAccess, requireDeviceController(), requireRemoteAssistDevice, async (req, res) => {
   const bastionClient = require('../../bastionClient');
-  if (!bastionClient.configured()) return res.status(503).json({ error: 'Bastion bridge not configured on the server (missing sentinel_bastion_internal_key secret)' });
+  if (!bastionClient.configured()) return res.status(503).json({ error: 'Support bridge not configured on the server' });
   try {
     const status = await bastionClient.sessionStatus(req.params.id);
     if (status?.connected) {
@@ -271,12 +271,12 @@ app.post('/api/devices/:id/remote-assist/reconnect', requireUnlocked, requireAut
     // no ack and no retry, so a key emitted into that window is silently dropped and the device
     // never installs it — administrators_authorized_keys stays stale and the user's connect
     // command fails "Permission denied (publickey)" while every dashboard feature keeps working
-    // (those authenticate with the bastion's admin-support key, which is already installed).
+    // (those authenticate with the bastion's standing support key, which is already installed).
     // Agent 2.0.8's on-disk pending-key persistence does NOT cover this: it protects keys that
     // ARRIVED and then lost their process, not keys that never arrived at all.
     //
     // Explicit user action (clicked Reconnect), same reasoning as /ssh-key above — always include
-    // the admin-support key so Snap/Forensics/IT-Audit/AppLocker work. Linux has no equivalent
+    // the standing support key so Snap/Forensics/IT-Audit/AppLocker work. Linux has no equivalent
     // (its admin trust is armed via emitRemoteAssistProvision's adminPubKey below, not a
     // per-connect key push), so only push this for Windows.
     if (req.raPlatform !== 'linux') {

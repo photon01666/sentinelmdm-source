@@ -11,7 +11,7 @@
          names, window/tray text) deliberately stays "SentinelRemoteAssist". Every hardcoded
          "SentinelRemoteAssist.exe" filename reference across this codebase (WatchdogRunner's
          process match, EdrWatcher/NukeRunner's own-tooling exclusion lists, AutoStartManager,
-         SilentInstaller, bastion-web.py's embedded PowerShell) was updated in the same change —
+         SilentInstaller, the support service's embedded PowerShell) was updated in the same change —
          see git history. -->
     <AssemblyName>Sentinel</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -132,7 +132,7 @@
          repeat the Telemetry-v1 ship-untested mistake. A 60s backstop re-checks canary
          existence/content hash in case FileSystemWatcher drops an event during the exact burst
          that matters most. Both new rule types (canary_file_touch, mass_file_modification) added to
-         bastion-web.py's ingest_edr_report() rule allow-list — NOT yet independently verified
+         the support service's ingest_edr_report() rule allow-list — NOT yet independently verified
          against a real controlled-detonation run on a Windows box; verify on the next test pass
          before trusting the autonomous kill path in the field. Live-verified 2026-07-19 on the
          canary path specifically (touch -> instant isolate, kill correctly skipped when no
@@ -153,9 +153,9 @@
          against a real hollowing PoC (only that the P/Invoke plumbing runs cleanly against
          ordinary processes without throwing) — report-only, MEDIUM, one alert per process
          lifetime, never autonomous, same posture as CreateRemoteThread. New rule
-         process_hollowing_indicator added to bastion-web.py's ingest_edr_report() allow-list. (c)
+         process_hollowing_indicator added to the support service's ingest_edr_report() allow-list. (c)
          Thread-suspend/resume dashboard exposure — new _EDR_PROCESS_SUSPEND_PS1/
-         _EDR_PROCESS_RESUME_PS1 in bastion-web.py (inline C# Add-Type mirroring
+         _EDR_PROCESS_RESUME_PS1 in the support service (inline C# Add-Type mirroring
          ProcessIntervention.cs's own OpenThread/SuspendThread/ResumeThread pattern, since Windows
          has no built-in cmdlet for this either), new Suspend/Resume buttons next to Kill in the
          dashboard's EDR process list — freezes/unfreezes every thread of a PID as a lighter-weight
@@ -164,7 +164,7 @@
          events in practice, so deferred until real Phase 3 usage shows it's actually needed.
          Live-verified 2026-07-19 against a real deployed 1.7.0.0: found and fixed a real bug
          where Kill/Suspend/Resume's PS1 param name $Pid collided with PowerShell's read-only
-         automatic $PID variable (bastion-web.py only, no agent-side change — see that repo's own
+         automatic $PID variable (the support service only, no agent-side change — see that repo's own
          history). 1.7.1 = RansomwareGuard.cs's autonomous-action storm-guard cap raised 5 -> 500
          per 2-minute window, explicit user call ("make it high enough it won't miss killing
          anything") — 5 was too conservative against the realistic worst case of many canaries
@@ -233,7 +233,7 @@
          lsass_access) for consistency. A second, independent bug in the same investigation (the
          bastion's signal_send() on every high-severity report had NO suppression at all,
          completely bypassing server.js's 30-min EDR_ALERT_SUPPRESS_MS window, which only guards a
-         separate alert path) was fixed bastion-side in bastion-web.py — no agent change needed
+         separate alert path) was fixed bastion-side in the support service — no agent change needed
          for that half. -->
     <!-- 1.8.5 = fixed a live remote-update-safety bug found 2026-07-20 while rolling out 1.8.4 to
          a dev-owned account-linked test VM: Program.cs's unattended-tunnel branch checked
@@ -320,7 +320,7 @@
     <!-- 1.8.14 = two RansomwareGuard/EDR fixes found live restoring a File Backup straight to
          Desktop (new destination-picker feature): (1) the mass-file-modification heuristic was
          false-firing on the restore's own legitimate scp burst — now skips rate-weighting for any
-         path under a "Restored-<epoch>" folder (the exact naming bastion-web.py's
+         path under a "Restored-<epoch>" folder (the exact naming the support service's
          restore_file_backup() gives a custom-destination restore). (2) SecurityNotification's
          WTSSendMessage call passed character counts where the API wants BYTE counts, silently
          truncating every EDR alert's title/body to roughly its first half ("Sentinel Security
@@ -431,7 +431,7 @@
          captured frames back. MainForm now starts/stops the bridge client exactly when it enters/leaves
          "status-only" mode (Load handler's autostart-already-on branch, OnAutoStartButtonClick's
          enable/disable transitions, FormClosed). Also: both remote-update-session.sh's and
-         bastion-web.py's self-update cutover scripts kill every SentinelRemoteAssist* process —
+         the support service's self-update cutover scripts kill every SentinelRemoteAssist* process —
          including the interactive one in Session 1 — but only ever restarted the SYSTEM/Session-0 task,
          leaving a device with NO interactive-session agent (and therefore no bridge client, and
          therefore no working Live Desktop) until the next reboot/logon; both scripts now also
@@ -534,7 +534,7 @@
          button. Also trimmed the very verbose per-frame/per-statement BridgeDiag logging added
          while diagnosing the 1.9.0.9/1.9.0.10 hang, now that the hang itself is fixed. -->
     <!-- 2.0.0 = EDR/ransomware-defense overhaul (audit-gap close-out, all three severity tiers;
-         full details in EdrWatcher.cs/RansomwareGuard.cs/LocalIsolation.cs and bastion-web.py's
+         full details in EdrWatcher.cs/RansomwareGuard.cs/LocalIsolation.cs and the support service's
          EDR provisioning section). Agent: Sysmon Events 6 (driver-load), 13 (registry
          persistence), 23 (file-delete attribution), 25 (process-tamper) now ingested and alerted
          (driver_load/registry_persistence/process_tamper); outbound connect alerting
@@ -547,7 +547,7 @@
          fixed drives; non-system drive roots watched; OneDrive added) — was user-profile-folders
          on C: only. LocalIsolation: DNS allow rules program-scoped to the OS resolver
          (svchost.exe) instead of a bare :53 allow, closing the DNS-tunneling exfil gap.
-          Bastion (bastion-web.py): Sysmon config widened (Event 6/13/23/25 + OneDrive paths),
+          Bastion (the support service): Sysmon config widened (Event 6/13/23/25 + OneDrive paths),
           EDR provisioning gains PS Script-Block Logging + VSS shadow-protection, AppLocker now
           ships Script + Dll collections (path-mirroring the Exe allowlist; encoded-PS flows are
           exempt from Script rules by AppLocker's own design), isolation block PS1's DNS rules

@@ -38,7 +38,7 @@ namespace SentinelRemoteAssist;
 /// DeleteOwnedAuthorizedKeys() below; found live, the ssh folder survived every prior nuke. Feature-
 /// level reverts that are PowerShell-territory (AppLocker policy, Defender exclusions, telemetry/
 /// WU blocks, USB-lockdown GP) run in the bastion's _AGENT_NUKE_PS1 BEFORE this task, while the
-/// Hop-2 channel is still alive — see bastion-web.py.
+/// Hop-2 channel is still alive — see the support service.
 /// </summary>
 internal static class NukeRunner
 {

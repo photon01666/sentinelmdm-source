@@ -144,7 +144,7 @@ class Prefs(context: Context) {
         set(v) = p.edit().putBoolean("vpn_tailnet_only", v).apply()
     // Full-tunnel IPv6: when true AND a full tunnel is active, the TUN advertises IPv6 (::/0 + v6 DNS)
     // so apps can use IPv6 over the tunnel. Default OFF — only safe once the egress nodes have working
-    // v6 (NAT66; see swarm-stacks/ipv6-egress). Server-pushed via the set_vpn `v6` field.
+    // v6 (NAT66; see the IPv6-egress notes). Server-pushed via the set_vpn `v6` field.
     var vpnV6Enabled: Boolean
         get()  = p.getBoolean("vpn_v6_enabled", false)
         set(v) = p.edit().putBoolean("vpn_v6_enabled", v).apply()
@@ -348,7 +348,7 @@ class Prefs(context: Context) {
     val realityNodes: List<String>
         get() = realityNodesCsv.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
-    // IPv6 entry nodes, index-aligned with realityNodesCsv (CA,VA,OR). The agent dials each node's
+    // IPv6 entry nodes, index-aligned with realityNodesCsv (node A/B/C). The agent dials each node's
     // IPv6 FIRST and falls back to IPv4 for the SAME node on failure (IPv6-first, 2026-09-23), so a
     // v6-only outage or a device without v6 degrades to today's IPv4-only behavior instead of failing.
     // Unset/empty entries mean "no v6 for that node" (dial IPv4 directly). Push-updatable like
@@ -373,16 +373,16 @@ class Prefs(context: Context) {
         return if (addr6 != null) listOf(addr6, addr4) else listOf(addr4)
     }
 
-    // Per-node REALITY camouflage SNI, index-aligned with realityNodesCsv (CA,VA,OR): node i borrows
+    // Per-node REALITY camouflage SNI, index-aligned with realityNodesCsv (node A/B/C): node i borrows
     // the TLS handshake of sni i. The server's two-inbound dispatcher (deployed 2026-06-11) accepts
     // each node's decoy on its reality-decoy inbound (CA=apple / VA=bing / OR=cloudflare) AND
     // www.microsoft.com on the universal reality-ms inbound — so an older agent on plain microsoft
     // still works and this can roll out without lockstep. Push-updatable; MUST stay aligned with the
     // server's per-node dest/serverNames (an SNI not in a node's serverNames is rejected).
-    // ASN-CONSISTENT OVH decoys (index-aligned CA,VA,OR). SAFE because the server is ADDITIVE
+    // ASN-CONSISTENT provider decoys (index-aligned node A/B/C). SAFE because the server is ADDITIVE
     // (deployed 2026-06-13): each node now accepts BOTH the old apple/bing/cloudflare (reality-decoy) AND
-    // these new OVH SNIs (reality-decoy2), so old + new agents both work — no lockstep break. The old
-    // reality-decoy identity is retired only AFTER the whole fleet reports an OVH-default build.
+    // these new provider SNIs (reality-decoy2), so old + new agents both work — no lockstep break. The old
+    // reality-decoy identity is retired only AFTER the whole fleet reports an provider-default build.
     var realitySniCsv: String
         get()  = p.getString("reality_sni", BuildConfig.REALITY_SNI) ?: BuildConfig.REALITY_SNI
         set(v) = p.edit().putString("reality_sni", v).apply()

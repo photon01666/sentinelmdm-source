@@ -4,7 +4,7 @@ namespace SentinelRemoteAssist;
 
 /// <summary>
 /// Reads <c>endpoint-config.json</c> (written by the bastion-pushed provisioning script — see
-/// bastion-web.py's _APPCONTROL_PROVISION_PS1) from <see cref="Config.AppControlDir"/>.
+/// the support service's _APPCONTROL_PROVISION_PS1) from <see cref="Config.AppControlDir"/>.
 /// TunnelRunner only ever needs <see cref="Enabled"/>/<see cref="LocalPort"/> to decide whether to
 /// add its conditional -L forward — it deliberately never reads the report token, keeping the
 /// bearer secret out of a process whose whole job is an outbound reverse tunnel, not app-control

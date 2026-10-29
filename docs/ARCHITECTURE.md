@@ -18,15 +18,15 @@
  └──────────────┘   └──────────────────┘   └─────────┬──────────┘
                                                      │ reverse SSH
                                                      ▼
-                                            operator-run bastion
-                                            (not in this repo)
+                                            operator-run
+                                            support endpoint
 ```
 
 - **Device → server** is initiated by the agent. The server never dials a device.
 - **Remote assist** is initiated by the operator through the server; the Windows/Linux
-  agent opens a reverse SSH tunnel to a bastion the operator controls.
-- **Bastion** is deliberately out of scope. Its address, host key, and REALITY
-  parameters are configuration, not code.
+  agent opens a reverse SSH tunnel to a support endpoint the operator controls.
+- The support endpoint is operator-run. Its address, host key, and REALITY parameters
+  are configuration, not code.
 
 ## Android agent (`android-agent/`)
 
@@ -92,7 +92,7 @@ reaches the hashing layer directly. The module layout is summarised above.
 
 - account-linked or ticket-based enrollment;
 - a control channel over Socket.IO;
-- reverse SSH support tunnels (Hop-1 to the bastion, Hop-2 per session);
+- reverse SSH support tunnels (Hop-1 to the support endpoint, Hop-2 per session);
 - endpoint hardening (AppLocker/WDAC, SRP, Windows Update control, EDR hooks);
 - optional S3/R2 network drive via `rclone`.
 
@@ -125,5 +125,5 @@ The pinned xray binary is embedded with `go:embed`; run
 - `server/server.js` must not grow. Moves are verbatim; new code goes in modules.
 - The agents never store plaintext server credentials in the repository. Build-time
   values are supplied through Gradle properties or environment variables.
-- The bastion, marketing site, GrapheneOS integration, desktop shell, simulator, and
-  deployment stacks are separate systems with their own release cadence.
+- Deployment topology and operational tooling are environment-specific and supplied by
+  the operator.

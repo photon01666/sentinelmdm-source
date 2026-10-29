@@ -21,7 +21,7 @@ import (
 // inspection."
 //
 // Requires `node` + a local `socket.io` install — see
-// swarm-stacks/ssh-bastion-client-linux/testdata note in README if this ever needs to run in a
+// ssh-bastion-client-linux/testdata note in README if this ever needs to run in a
 // stripped-down CI image without them; skips gracefully if node isn't found.
 func TestConnect_RealSocketIOServer(t *testing.T) {
 	nodeBin, err := exec.LookPath("node")

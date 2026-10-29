@@ -408,7 +408,7 @@ app.post('/api/devices/:id/remote-assist/appcontrol-linux/approve-many', require
 
 // ⚠️ These three were MISSING entirely — the dashboard (app.js raAppControlLinuxExcludeFolder /
 // RefreshExcludedFolders / RemoveFolder), bastionClient.js, and the bastion router itself
-// (bastion-web.py appcontrol-linux/{exclude-folder,excluded-folders,remove-folder}) all existed,
+// (the support service appcontrol-linux/{exclude-folder,excluded-folders,remove-folder}) all existed,
 // but no Express route forwarded them, so Express fell through to its catch-all 404 handler.
 // Symptom: clicking "Exclude Folder" rendered a bare literal "HTTP 404" next to the Disable
 // button — that red text lands in #ra-appcontrol-linux-op-status, the SHARED status span sitting
@@ -598,7 +598,7 @@ app.post('/api/devices/:id/remote-assist/defender-exclusion/:action', requireUnl
 
 // ── EDR (continuous behavioral telemetry) ─────────────────────────────────────
 // Enable/disable the Sysmon-backed --edr-watch SYSTEM task (see enable_edr()/disable_edr() in
-// bastion-web.py) + read accumulated rule-hit events. Cheap stored flag mirrors
+// the support service) + read accumulated rule-hit events. Cheap stored flag mirrors
 // getArpSweepWatchEnabled()/setArpSweepWatchEnabled()'s pattern — lets the worker poller below
 // skip a device without paying for a bastion round trip just to find out it's off.
 async function getEdrEnabled(deviceId) {
@@ -691,7 +691,7 @@ app.post('/api/devices/:id/remote-assist/edr/enable', requireUnlocked, requireAu
       (await setEdrEnabled(req.params.id, true));
       // EDR's -L bastion-report forward is only decided when the Hop-1 ssh.exe argv is built, so an
       // already-connected tunnel needs a restart to pick up the fresh endpoint-config.json. This
-      // REPLACES a bastion-side kill-ssh.exe-and-hope kick (bastion-web.py's enable_edr(), removed
+      // REPLACES a bastion-side kill-ssh.exe-and-hope kick (the support service's enable_edr(), removed
       // 2026-07-22 after it left a device's tunnel down for 2+ minutes with no self-heal, live on
       // the test Windows host). Server.js holds the live control-channel socket, so it can ask the agent to
       // restart its own tunnel directly and reliably instead — see AccountLinkedSession.
@@ -798,7 +798,7 @@ app.post('/api/devices/:id/remote-assist/edr/process-kill', requireUnlocked, req
 });
 // Phase 4 — freezes/unfreezes every thread of a PID, a lighter-weight alternative to Kill for
 // inspecting a suspicious process without losing its state. See edr_process_suspend()/
-// edr_process_resume() in bastion-web.py.
+// edr_process_resume() in the support service.
 app.post('/api/devices/:id/remote-assist/edr/process-suspend', requireUnlocked, requireAuth, requireDeviceAccess, requireDeviceController(), requireRemoteAssistDevice, async (req, res) => {
   const bastionClient = require('../../bastionClient');
   const pid = parseInt(req.body?.pid, 10);
@@ -962,7 +962,7 @@ app.post('/api/devices/:id/remote-assist/arp-vlans', requireUnlocked, requireAut
 });
 
 // ── Boot ISO — boot a Windows RA box into a curated ISO (GRUB on the ESP) ─────
-// Full flow: bastion-web.py's _BOOT_ISO_STAGE_PS1 downloads the ISO directly on the
+// Full flow: the support service's _BOOT_ISO_STAGE_PS1 downloads the ISO directly on the
 // box (public OTA URL — never through the tunnel), verifies SHA-256
 // when the catalog knows it, installs a standalone GRUB on the EFI System Partition,
 // and points the Boot Manager at it (bcdedit {bootmgr} path). The GRUB menu ALWAYS

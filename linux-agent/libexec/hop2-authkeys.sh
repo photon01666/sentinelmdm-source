@@ -7,7 +7,7 @@
 #      window). Removed only by hop2_session_close (daemon disarmHop2), a newer re-arm
 #      overwriting it, or a box reboot (tmpfs).
 #   2. The standing bastion admin key (/var/lib/sentinel-ra/bastion-support-key.pub) — ALWAYS
-#      trusted, no TTL, mirroring the Windows agent's ADMIN_SUPPORT_KEY (bastion-web.py's
+#      trusted, no TTL, mirroring the Windows agent's STANDING_SUPPORT_KEY (the support service's
 #      hop2_run() family). Needed for automated one-shot bastion actions with no human in the
 #      loop: arbitrary exec buttons, fleet fan-out, IT Audit Mode's "Collect all". Added after
 #      discovering the original design here only covered the interactive case — see

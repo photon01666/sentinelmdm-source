@@ -39,7 +39,7 @@ cannot start. See `android-agent/native/README-hev-socks5-tunnel.md`.
 **Privileged permissions.** The manifest requests several
 `signature|privileged` permissions. A normal install silently ignores them; a
 Device-Owner install grants the rest through the Device Policy Controller. Full
-system-level behaviour requires platform signing or a ROM integration (not included).
+system-level behaviour requires platform signing or a ROM integration.
 
 ## Android client (`android-client/`)
 
@@ -74,7 +74,7 @@ npm start
 
 The server refuses to start without `ADMIN_PASS`. SQLite is used by default
 (`./tracker.db`); set `DATABASE_URL` to use Postgres. `Dockerfile` is provided for
-container builds; deployment manifests are intentionally not included.
+container builds; supply your own deployment configuration.
 
 ## Windows agent (`windows-agent/`)
 
@@ -91,7 +91,7 @@ project builds without them; the full self-contained installer does not. Place t
 `SentinelRemoteAssist/` before packaging.
 
 The agent's endpoint is read from `SENTINEL_SERVER_URL` at runtime (default
-`https://app.example.com`). The bastion host/key and REALITY values are also
+`https://app.example.com`). The support endpoint host/key and REALITY values are also
 environment-driven; see [`CONFIGURATION.md`](CONFIGURATION.md).
 
 ## Linux agent (`linux-agent/`)

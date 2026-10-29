@@ -41,7 +41,7 @@ internal static class AccountLinkedSession
     ///
     /// ⚠️ 2.0.6 — this MUST stay a COLLECTION, never a single string. `/api/devices/:id/
     /// remote-assist/ssh-key` emits TWO pushes ~15ms apart (the browser session key, then the
-    /// bastion admin-support key added by the 2.0.4 fix). With a single-valued static, push #2
+    /// bastion standing support key added by the 2.0.4 fix). With a single-valued static, push #2
     /// overwrote push #1 long before RunSetup() got as far as BuildScript() — so BOTH setup runs
     /// substituted the ADMIN key, which was already present in administrators_authorized_keys, so
     /// `$lines -notcontains $extraPubkey` was false, nothing was written, and the file's mtime
@@ -107,7 +107,7 @@ internal static class AccountLinkedSession
     /// xray+control-channel stack, which is unnecessary (and disruptive) just to recover a tunnel
     /// that died for a reason the agent's own process could not detect (e.g. an externally killed
     /// ssh.exe whose exit TunnelRunner's retry loop never observed — see the EDR/AppControl/WinUpdate
-    /// "kick" call sites in bastion-web.py, which used to kill ssh.exe externally and hope the agent's
+    /// "kick" call sites in the support service, which used to kill ssh.exe externally and hope the agent's
     /// retry loop noticed; unreliable, confirmed live 2026-07-22 on the test Windows host: the tunnel stayed down
     /// ~2m19s with no retry-log line until a full Regen Private Key cycle recovered it). The handler
     /// in Program.cs just calls Stop()+Start() on the same TunnelRunner instance already in use.</summary>

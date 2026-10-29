@@ -154,7 +154,7 @@ internal static class Program
             return 1;
         }
 
-        // Invoked by the SYSTEM-run scheduled task bastion-web.py's _APPCONTROL_PROVISION_PS1
+        // Invoked by the SYSTEM-run scheduled task the support service's _APPCONTROL_PROVISION_PS1
         // registers (SentinelRemoteAssist-AppControlWatch, AtStartup) — NOT part of the
         // SetupRunner-managed task set, deliberately decoupled from Remote Assist's own ephemeral
         // session lifecycle (see Config.AppControlDir's doc comment). Tails
@@ -168,7 +168,7 @@ internal static class Program
             return AppControlWatcher.Run();
         }
 
-        // Invoked by the SYSTEM-run scheduled task bastion-web.py's _EDR_PROVISION_PS1 registers
+        // Invoked by the SYSTEM-run scheduled task the support service's _EDR_PROVISION_PS1 registers
         // (SentinelRemoteAssist-EdrWatch, AtStartup) — same decoupled-from-ephemeral-lifecycle
         // pattern as --appcontrol-watch above (see Config.EdrDir's doc comment). Tails
         // Microsoft-Windows-Sysmon/Operational and reports rule-hits back to the bastion over

@@ -141,7 +141,7 @@ you have your own values.
 | Variable | Purpose |
 | :--- | :--- |
 | `SENTINEL_SERVER_URL` | Control server base URL. |
-| `SENTINEL_BASTION_HOST` | Bastion host for the Hop-1 `HostKeyAlias`. |
+| `SENTINEL_BASTION_HOST` | Support endpoint host for the Hop-1 `HostKeyAlias`. |
 | `SENTINEL_BASTION_KNOWN_HOSTS` | Pinned `[host]:port ssh-ed25519 ...` line. |
 | `SENTINEL_REALITY_NODES` | Comma-separated REALITY node IPv4s. |
 | `SENTINEL_REALITY_NODES_V6` | Index-aligned IPv6s. |

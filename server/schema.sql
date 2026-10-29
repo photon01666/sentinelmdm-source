@@ -1043,7 +1043,7 @@ CREATE TABLE IF NOT EXISTS wifi_aps (
   updated_at BIGINT NOT NULL
 );
 
--- AppLocker blocked-file auto-upload — see server.js's runtime migration comment / bastion-web.py's
+-- AppLocker blocked-file auto-upload — see server.js's runtime migration comment / the support service's
 -- fetch_blocked_file_to_disk() doc comment. r2_key is NULL for a 'skipped_size' row until an admin
 -- force-uploads it.
 -- path_hash = sha256(lowercased path), for dedup/delete lookups (encrypted `path` can't be

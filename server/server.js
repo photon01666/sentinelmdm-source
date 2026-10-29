@@ -1029,7 +1029,7 @@ db.exec("UPDATE devices SET locked_identity_email=NULL, locked_pubkey_sha=NULL W
   log('error', 'Migration failed: clear stale Windows device locks', { error: e.message });
 });
 
-// AppLocker blocked-file auto-upload — see bastion-web.py's fetch_blocked_file_to_disk() doc
+// AppLocker blocked-file auto-upload — see the support service's fetch_blocked_file_to_disk() doc
 // comment for the pull mechanism. r2_key is NULL for a 'skipped_size' row (metadata only, no bytes
 // ever left the customer's PC) until an admin force-uploads it. path/file_name encrypted at rest,
 // same as every other per-device blob table.
@@ -2423,7 +2423,7 @@ const { remoteAssistTransportCommand } = require('./helpers/remote-assist-transp
 const { emitRemoteAssistProvision } = require('./helpers/emit-remote-assist-provision')({ XRAY_REMOTEASSIST_UUID, deviceEmit, emitToDevice, log, remoteAssistTransportCommand });
 
 // ── Shared OpenCode (DeepSeek) API client — used by IT Mode Audit + screen-text AI analysis ────
-// Independent caller of the SAME external API/secret bastion-web.py's _call_opencode_analysis()
+// Independent caller of the SAME external API/secret the support service's _call_opencode_analysis()
 // already uses for IT Mode Audit — these calls live entirely server-side (tracker/worker), never
 // routed through the bastion. (The former AI Live Chat feature was purged 2026-09-11; the shared
 // client + `opencode_api_key` secret remain because the IT-audit and screen-text AI features use them.)
@@ -2620,7 +2620,7 @@ require('./routes/file-backup-schedule')({ FILE_BACKUP_MIN_SCHEDULE_MINUTES, app
 
 // Which folders a device's backup includes — the well-known personal folders (subset of
 // FILE_BACKUP_KNOWN_FOLDERS, pulled once PER real user profile) plus admin-picked custom absolute
-// paths (from the folder-browser modal, pulled once each — see bastion-web.py's run_file_backup
+// paths (from the folder-browser modal, pulled once each — see the support service's run_file_backup
 // doc comment for why the two are treated differently). Per-device (not per-account like the S3
 // config) since different devices have different filesystems worth browsing.
 const FILE_BACKUP_KNOWN_FOLDERS = ['Desktop', 'Documents', 'Pictures', 'Videos', 'Music', 'Downloads'];
@@ -2744,7 +2744,7 @@ require('./routes/file-backup')({ app, db, getFileBackupEncryptionPassword, getF
 // both shares) — settings['s3_drive_s3:'+userId], same shape as FILE_BACKUP_S3_FIELDS.
 // Config/secrets are pushed to the device over its own Socket.IO control channel (`set_s3_drive`
 // command) exactly like set_vpn/vpnCommand — rclone then runs ON the Windows box and talks to S3
-// directly. This feature never touches bastionClient.js/bastion-web.py at all.
+// directly. This feature never touches bastionClient.js/the support service at all.
 // ── S3 bucket network drive — per-account + per-device settings — helpers/s3-drive-settings.js ──
 // All twelve accessors are consumed below (routes/s3-drive.js, sockets/connection.js);
 // S3_DRIVE_S3_FIELDS and resolveS3DriveSettingsForOwner stay private to the module.
@@ -2765,7 +2765,7 @@ require('./routes/bitlocker')({ app, db, decryptText, encryptText, ingestBitlock
 // ── SRP / AppLocker audit + deploy — routes/srp.js ──
 // ── SRP wildcard-folder guard. Shared by the srp deploy route (injected) and the fleet
 // what-ran/approve route below, so it stays in server.js (hoisted function decls). ──
-// Mirrors bastion-web.py's _is_dangerous_wildcard_folder() -- defense in depth (the bastion is
+// Mirrors the support service's _is_dangerous_wildcard_folder() -- defense in depth (the bastion is
 // the authoritative enforcement point, since it's the one actually building the AppLocker policy,
 // but never rely on a single layer for something this consequential). A folder-wildcard string
 // entry (as opposed to a {type:'publisher',...} dict, which is always safe regardless of location)

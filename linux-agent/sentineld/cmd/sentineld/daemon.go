@@ -26,7 +26,7 @@ import (
 const hop2LocalTarget = "127.0.0.1:2222"
 
 // hop1BastionUser is the bastion account Hop-1 authenticates as. The original choice of "sentinel-jump"
-// here was wrong — that account is bastion-web.py's grant_jump_access() ProxyJump account for a
+// here was wrong — that account is the support service's grant_jump_access() ProxyJump account for a
 // HUMAN admin's manual `ssh -J sentinel-jump@... sentinel-support@127.0.0.1:<port>` (see the "Remote agent
 // update" runbook's example), gated by a completely SEPARATE authorized_keys file
 // (/data/sentinel-jump-authorized_keys, populated by grant_jump_access() with a browser-generated
@@ -57,8 +57,8 @@ type provisionPayload struct {
 	NodeIndex   int    `json:"nodeIndex"`
 	ForwardPort int    `json:"forwardPort"`
 
-	// AdminPubKey is the bastion's STANDING Hop-2 trust key (mirrors Windows' ADMIN_SUPPORT_KEY,
-	// bastion-web.py's hop2_run() family) — added after reading the real bastion-web.py code
+	// AdminPubKey is the bastion's STANDING Hop-2 trust key (mirrors Windows' STANDING_SUPPORT_KEY,
+	// the support service's hop2_run() family) — added after reading the real the support service code
 	// revealed the original design only covered the interactive "human clicked Connect" case.
 	// Persisted to disk (see armHop2AdminKey below) so hop2-authkeys.sh can trust it
 	// unconditionally, no TTL, for automated one-shot bastion actions (arbitrary exec, fleet
@@ -669,7 +669,7 @@ func disarmHop2(runDir string) error {
 }
 
 // writeAdminPubKey persists the bastion's STANDING Hop-2 admin key — the Linux counterpart to
-// Windows' ADMIN_SUPPORT_KEY (bastion-web.py's hop2_run() family), which unlike the TTL-armed
+// Windows' STANDING_SUPPORT_KEY (the support service's hop2_run() family), which unlike the TTL-armed
 // session key in armHop2 above is trusted unconditionally by libexec/hop2-authkeys.sh, no
 // expiry. Written under stateDir (sentinel-ra-owned, e.g. config.StateDir) rather than
 // /etc/sentinel-ra so the unprivileged daemon process can write it directly. Path MUST match

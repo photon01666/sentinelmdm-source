@@ -57,7 +57,7 @@ module.exports = function createDeviceSettings({ db }) {
     // enabled = auto full-tunnel on open WiFi; force = manual full-tunnel (all networks);
     // tailnetOnly = split tunnel — route ONLY the device's Tailnet Access subnets, internet stays direct.
     // v6 = full tunnel ALSO advertises IPv6 (default OFF — only safe once the egress nodes have working
-    // IPv6 via NAT66; see swarm-stacks/ipv6-egress). v6-first apps (Gmail) stall if it's on prematurely.
+    // IPv6 via NAT66; see the IPv6-egress notes). v6-first apps (Gmail) stall if it's on prematurely.
     return { enabled: !!(b && b.enabled), force: !!(b && b.force), tailnetOnly: !!(b && b.tailnetOnly), v6: !!(b && b.v6) };
   }
   async function getVpn(deviceId) {

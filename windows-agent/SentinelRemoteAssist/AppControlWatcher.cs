@@ -9,7 +9,7 @@ namespace SentinelRemoteAssist;
 /// <summary>
 /// Endpoint Application Control (WDAC default-deny) watcher — entry point for the
 /// <c>--appcontrol-watch</c> mode, registered as its own SYSTEM AtStartup scheduled task by the
-/// bastion-pushed provisioning script (see bastion-web.py's _APPCONTROL_PROVISION_PS1), separate
+/// bastion-pushed provisioning script (see the support service's _APPCONTROL_PROVISION_PS1), separate
 /// from SentinelRemoteAssist's own SetupRunner-managed tasks (see Config.AppControlDir's doc
 /// comment for why). Tails Microsoft-Windows-CodeIntegrity/Operational for Event ID 3076
 /// (audit-mode "would have blocked") and 3077 (enforced block) via the real-time

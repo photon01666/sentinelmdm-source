@@ -1,5 +1,5 @@
 // routes/sleep-check-and-internal-ra-access.js — deep-sleep wake poll (device-signature auth)
-// + INTERNAL_KEY-authed bastion ownership gate. Both pre-auth/pre-unlock by design (see comments).
+// + service-authenticated support ownership gate. Both pre-auth/pre-unlock by design (see comments).
 module.exports = ({ app, authenticateDeviceRequest, db, deviceOwnerInfo, express }) => {
 // Device polls this while in deep sleep to check whether it should wake up.
 // Registered BEFORE app.use(requireUnlocked): deep_sleep and theft_mode are plaintext
@@ -21,9 +21,9 @@ app.get('/api/devices/:id/sleep-check', async (req, res) => {
   res.json({ wake: device.deep_sleep === 0 || device.theft_mode === 1 });
 });
 
-// ── Bastion → server ownership gate (INTERNAL_KEY-authed, fail-closed) ─────────────────────────
+// ── Support service -> server ownership gate (service-authenticated, fail-closed) ─────────────
 // Placed BEFORE requireUnlocked/requireAuth: this is an internal service-to-service route, not a
-// user-facing endpoint. The bastion authenticates with the shared INTERNAL_KEY secret. Session-
+// user-facing endpoint. The support service authenticates with a shared service secret. Session-
 // level auth would reject the bastion's request (it has no session cookie), so this runs upstream
 // of every session middleware. See the ZK Security invariant rows in docs/ARCHITECTURE.md for the design.
 app.post('/api/internal/ra-access', express.json(), async (req, res) => {

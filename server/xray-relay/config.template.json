@@ -10,7 +10,7 @@
         "clients": [
           { "id": "__UUID__",         "email": "control@sentinel" },
           { "id": "__VPN_UUID__",     "email": "vpn@sentinel" },
-          { "id": "__TAILNET_UUID__", "email": "tailnet@sentinel" },
+          { "id": "__TAILNET_UUID__", "email": "private@sentinel" },
           { "id": "__REMOTEASSIST_UUID__", "email": "remoteassist@sentinel" }
         ],
         "decryption": "none"
@@ -30,24 +30,24 @@
     }
   ],
   "outbounds": [
-    { "tag": "to-tracker",       "protocol": "freedom", "settings": { "redirect": "tracker:3000" } },
-    { "tag": "to-traefik",       "protocol": "freedom", "settings": { "redirect": "traefik:443" } },
+    { "tag": "to-app",       "protocol": "freedom", "settings": { "redirect": "app:3000" } },
+    { "tag": "to-proxy",       "protocol": "freedom", "settings": { "redirect": "proxy:443" } },
     { "tag": "to-internet",      "protocol": "freedom" },
-    { "tag": "tailnet-socks-out","protocol": "socks",   "settings": { "servers": [ { "address": "tailscale-relay", "port": 1055 } ] } },
-    { "tag": "to-bastion-ssh",   "protocol": "freedom", "settings": { "redirect": "bastion:22022" } },
+    { "tag": "socks-out","protocol": "socks",   "settings": { "servers": [ { "address": "socks-relay", "port": 1055 } ] } },
+    { "tag": "to-support-ssh",   "protocol": "freedom", "settings": { "redirect": "support:22" } },
     { "tag": "blocked",          "protocol": "blackhole" }
   ],
   "routing": {
     "domainStrategy": "AsIs",
     "rules": [
-      { "type": "field", "user": ["control@sentinel"], "outboundTag": "to-tracker" },
-      { "type": "field", "user": ["vpn@sentinel"], "ip": ["100.64.0.0/10", "192.168.0.0/16", "10.0.0.0/8"], "outboundTag": "tailnet-socks-out" },
+      { "type": "field", "user": ["control@sentinel"], "outboundTag": "to-app" },
+      { "type": "field", "user": ["vpn@sentinel"], "ip": ["100.64.0.0/10", "192.168.0.0/16", "10.0.0.0/8"], "outboundTag": "socks-out" },
       { "type": "field", "user": ["vpn@sentinel"], "ip": ["10.0.0.0/8", "172.16.0.0/12", "127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"], "outboundTag": "blocked" },
-      { "type": "field", "user": ["vpn@sentinel"], "domain": ["full:hass.example.com"], "outboundTag": "to-traefik" },
+      { "type": "field", "user": ["vpn@sentinel"], "domain": ["full:app.example.com"], "outboundTag": "to-proxy" },
       { "type": "field", "user": ["vpn@sentinel"], "outboundTag": "to-internet" },
-      { "type": "field", "user": ["tailnet@sentinel"], "ip": ["100.64.0.0/10", "192.168.0.0/16", "10.0.0.0/8"], "outboundTag": "tailnet-socks-out" },
-      { "type": "field", "user": ["tailnet@sentinel"], "outboundTag": "blocked" },
-      { "type": "field", "user": ["remoteassist@sentinel"], "outboundTag": "to-bastion-ssh" }
+      { "type": "field", "user": ["private@sentinel"], "ip": ["100.64.0.0/10", "192.168.0.0/16", "10.0.0.0/8"], "outboundTag": "socks-out" },
+      { "type": "field", "user": ["private@sentinel"], "outboundTag": "blocked" },
+      { "type": "field", "user": ["remoteassist@sentinel"], "outboundTag": "to-support-ssh" }
     ]
   }
 }

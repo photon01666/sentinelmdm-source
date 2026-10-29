@@ -75,12 +75,12 @@ internal static class RansomwareGuard
     //     aren't local filesystem events Sysmon/FSW can attribute anyway.
     private const string SystemDriveRoot = @"C:\";
 
-    // The File Backup restore feature's location picker (server.js/bastion-web.py) can now target
+    // The File Backup restore feature's location picker (server.js/the support service) can now target
     // ANY folder including Desktop/Documents/Pictures/Downloads — the exact roots this class
     // watches — and pushes a whole backup's worth of files via one scp -r burst straight into it.
     // That legitimate, admin-initiated write is indistinguishable from a real encryptor's fast
     // multi-file burst by rate alone, and it always lands inside a folder named "Restored-<epoch
-    // seconds>" (bastion-web.py's restore_file_backup(): `f"{base_dest}\\Restored-{ts}"`) — a name
+    // seconds>" (the support service's restore_file_backup(): `f"{base_dest}\\Restored-{ts}"`) — a name
     // no real ransomware or legitimate third-party software would ever produce. Skip rate-weighting
     // entirely for anything under such a folder (not just skip the report) so a large restore never
     // pollutes the sliding window at all — a genuinely separate concurrent attack elsewhere still

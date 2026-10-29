@@ -222,7 +222,7 @@ internal sealed class S3DriveManager
 
     // rclone connection-string chaining — crypt wraps the on-the-fly S3 remote inline, no
     // rclone.conf ever written to disk (same "no credentials/config on disk" property
-    // bastion-web.py's File Backup code already maintains for its own openssl+rclone pipeline).
+    // the support service's File Backup code already maintains for its own openssl+rclone pipeline).
     // Only the bucket/prefix path lives here now — no values containing colons, so no escaping
     // concerns (see BuildS3Env's doc comment for why the S3 connection options moved out).
     private static string BuildCryptRemote(string bucket, string prefix, string obscuredPassword)

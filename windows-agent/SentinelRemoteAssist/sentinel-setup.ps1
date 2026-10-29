@@ -219,7 +219,7 @@ if ($pubkey -and $pubkey.Trim()) {
 # Append every pushed session key not already present.
 #
 # $extraPubkey is NEWLINE-SEPARATED (one key per line) as of 2.0.6 — the server pushes the browser
-# session key and the bastion admin-support key back to back, and the agent now accumulates both
+# session key and the bastion standing support key back to back, and the agent now accumulates both
 # instead of letting the second overwrite the first. Splitting here is what makes the browser key
 # actually land; before this, the admin key (already present) was the only value that survived, so
 # this whole block no-op'd and the customer's connect.sh failed at Hop-2 forever.

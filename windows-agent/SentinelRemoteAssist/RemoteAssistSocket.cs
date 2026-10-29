@@ -159,7 +159,7 @@ internal sealed class RemoteAssistSocket
                 var exclude = payload.TryGetProperty("excludeSharedOperatorKey", out var ex) && ex.GetBoolean();
                 if (string.IsNullOrEmpty(pubKey)) return;
                 // Accumulate — never assign. The server pushes the browser key and the
-                // admin-support key back to back (~15ms apart); a single-valued field let the
+                // standing support key back to back (~15ms apart); a single-valued field let the
                 // second clobber the first before setup ever read it. See
                 // AccountLinkedSession.PendingSshPublicKeys for the full forensics.
                 AccountLinkedSession.AddPendingSshPublicKey(pubKey);

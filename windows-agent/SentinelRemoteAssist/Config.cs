@@ -3,18 +3,16 @@ using System.Diagnostics;
 namespace SentinelRemoteAssist;
 
 /// <summary>
-/// Build-time constants. <see cref="AdminHopTwoPublicKey"/> is the ONE dedicated "admin-support"
-/// keypair's public half (generated once by the admin, reused across every future customer/session
-/// — see windows-agent/README.md). It never changes per-session; the per-session Hop-1 tunnel key
-/// is baked into <c>SessionEmbedded.cs</c> at build time by <c>new-support-session.sh</c> (single
-/// .exe, no companion file).
+/// Build-time constants. The optional standing support public key is the public half of a
+/// keypair held by the operator; it is reused across sessions and never changes per-session.
+/// The per-session Hop-1 tunnel key is baked into <c>SessionEmbedded.cs</c> at build time
+/// (single .exe, no companion file).
 ///
-/// Blast radius: the matching private half lives only on VA at
-/// <c>the bastion host</c>. A leak of that private key grants
-/// Administrator access to every machine that CURRENTLY has a live session (or has "start
-/// automatically" enabled — that path deliberately keeps the account/key/sshd installed).
-/// Attended/ephemeral mode removes the account on app close so the window is bounded to the
-/// open window; autostart reintroduces standing access by explicit customer opt-in.
+/// The matching private half is held by the operator. A leak would grant Administrator access
+/// to every machine that CURRENTLY has a live session (or has "start automatically" enabled —
+/// that path deliberately keeps the account/key/sshd installed). Attended/ephemeral mode removes
+/// the account on app close so the window is bounded to the open window; autostart reintroduces
+/// standing access by explicit customer opt-in.
 /// </summary>
 internal static class Config
 {
@@ -75,7 +73,7 @@ internal static class Config
     /// session provisioning, pushed to the device via remote_assist_ssh_key on first Connect)
     /// replaces it. Every device now gets session-scoped keys with full lifecycle management.
     /// The bastion falls back to the old bastion-support-key for backward compat during migration.
-    /// See bastion-web.py's hop2_ssh_base_args() and _ensure_session_hop2_key().
+    /// See the support service's hop2_ssh_base_args() and _ensure_session_hop2_key().
     /// </summary>
     public const string AdminHopTwoPublicKey = "";
 
@@ -121,7 +119,7 @@ internal static class Config
         (System.Environment.GetEnvironmentVariable("SENTINEL_REALITY_NODES") ?? "")
             .Split(',', System.StringSplitOptions.RemoveEmptyEntries);
     /// <summary>Per-node REALITY camouflage SNI, index-aligned with <see cref="RealityNodes"/>
-    /// (CA,VA,OR) — matches Android Prefs.realitySniCsv default "www.microsoft.com,www.microsoft.com,
+    /// (node A/B/C) — matches Android Prefs.realitySniCsv default "www.microsoft.com,www.microsoft.com,
     /// www.microsoft.com" and the desktop /opt/sentinel-xray/config.json outbounds.</summary>
     public static readonly string[] RealitySnis =
         (System.Environment.GetEnvironmentVariable("SENTINEL_REALITY_SNIS") ?? "www.microsoft.com")
@@ -130,7 +128,7 @@ internal static class Config
     public static readonly string RealitySni =
         System.Environment.GetEnvironmentVariable("SENTINEL_REALITY_SNI") ?? "www.microsoft.com";
 
-    /// <summary>Per-node IPv6 literals, index-aligned with <see cref="RealityNodes"/> (CA,VA,OR) —
+    /// <summary>Per-node IPv6 literals, index-aligned with <see cref="RealityNodes"/> (node A/B/C) —
     /// the same public/non-secret fleet values the Android agent ships as its `reality_nodes_v6`
     /// pref default (the reference implementation). The nodes' REALITY :443 listeners are
     /// dual-stack (re-verified live 2026-09-26 alongside the sentineld port), so dialing a v6

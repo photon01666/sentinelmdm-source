@@ -10,18 +10,18 @@
 // relative requires: none
 
 module.exports = () => {
-// ── Bastion → server ownership gate (INTERNAL_KEY-authed, fail-closed) ─────────────────────────
-// The bastion has no ownership concept — labels are opaque IDs, and the standing admin-support
-// key would let an operator ssh into ANY device with zero server interaction. This internal route
-// gives the bastion a hook to ask the server "can this caller access this device?" before any
+// ── Support service -> server ownership gate (service-authenticated, fail-closed) ──────────────
+// The support service has no ownership concept — labels are opaque IDs, and a standing support
+// key would let an operator reach ANY device with zero server interaction. This internal route
+// lets the support service ask the server "can this caller access this device?" before any
 // operator-plane action (Hop-2, powershell, forensics, winupdate, appcontrol, edr, bitlocker,
 // telemetry, sentry, usblock, arp-scan, IT audit, SRP, screenview, file-backup, agent-update,
-// create_session/rebuild/remint). Autonomous jobs and server-bridge calls (bastionClient.js →
-// INTERNAL_KEY) are exempt — they're the trusted path the owner's dashboard already gates.
+// create_session/rebuild/remint). Autonomous jobs and server-bridge calls are exempt — they're
+// the trusted path the owner's dashboard already gates.
 //
 // Decision: ZK (public-owned) devices are HARD-BLOCKED — no operator action, no IT Mode Audit
 // exemption. The sole admin path to full access on a ZK device is impersonation (Hybrid
-// Managed support delegate) via the dashboard, which rides the trusted INTERNAL_KEY bridge.
+// Managed support delegate) via the dashboard, which rides the trusted service bridge.
 // Non-ZK (admin-fleet, unowned) devices are allowed through.
 // ── Windows Fleet — global controls across every remote_assist device the CALLER controls ─────
 // Powers the dashboard's top-nav "Windows Fleet" menu: apply one action to every device at once
