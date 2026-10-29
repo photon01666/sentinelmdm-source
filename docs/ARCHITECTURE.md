@@ -14,7 +14,7 @@
         │
  ┌──────▼───────┐   ┌──────────────────┐   ┌────────────────────┐
  │ android-agent/ │   │ android-client/ │   │ windows-agent/     │
- │ Device Owner │   │ parent WebView   │   │ linux-agent/       │
+ │ Device Owner │   │ user WebView   │   │ linux-agent/       │
  └──────────────┘   └──────────────────┘   └─────────┬──────────┘
                                                      │ reverse SSH
                                                      ▼
