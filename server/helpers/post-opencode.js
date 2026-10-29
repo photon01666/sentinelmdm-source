@@ -49,7 +49,7 @@ async function postOpencode(bodyObj, timeoutMs = 60000, sessionId = crypto.rando
           'Authorization': `Bearer ${key}`,
           'x-opencode-session': sessionId,
           // Cloudflare 403s (error 1010) the default fetch User-Agent on this endpoint —
-          // same requirement bastion-web.py already had.
+          // same requirement the support service already had.
           'User-Agent': 'SentinelMDM/2.26',
         },
         body: JSON.stringify(bodyObj),

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Self-update helper for the Linux Remote Assist agent (sentineld) — invoked via a narrowly-scoped
 # sudo rule (see install.sh's /etc/sudoers.d/sentinel-remote-assist entry) by the sentinel-support
-# account, itself triggered remotely by bastion-web.py's agent_self_update_linux() over Hop-2 in
+# account, itself triggered remotely by the support service's agent_self_update_linux() over Hop-2 in
 # response to the dashboard's "Update Now" button.
 #
 # Unlike the Windows agent (a per-account custom BUILD, pushed to the box via SCP from bastion),

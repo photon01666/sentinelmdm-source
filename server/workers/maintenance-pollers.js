@@ -259,7 +259,7 @@ if (IS_WORKER) setInterval(async () => {
 // the WebUI's encryption-percentage progress bar advances without a manual click, and ingests any
 // newly-seen RecoveryPassword key protector exactly like the manual enable/status routes do.
 // bitlockerStatus() itself no-ops cheaply (no SSH round trip) for a disconnected session — see
-// _session_is_connected() in bitlocker_status()/bastion-web.py — so skipping offline devices here
+// _session_is_connected() in bitlocker_status()/the support service — so skipping offline devices here
 // needs no extra pre-check.
 if (IS_WORKER) setInterval(async () => {
   const bastionClient = require('../bastionClient');

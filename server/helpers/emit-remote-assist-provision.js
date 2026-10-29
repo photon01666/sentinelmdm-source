@@ -12,16 +12,14 @@
 // (bastionClient.js lives at the server root; verified resolvable from helpers/).
 
 module.exports = ({ XRAY_REMOTEASSIST_UUID, deviceEmit, emitToDevice, log, remoteAssistTransportCommand }) => {
-// Linux's sentineld daemon uses its OWN provisioning contract, unrelated to the Windows
-// 'set_remote_assist_transport' command above — see remoteAssistProvisionEvent's doc comment in
-// swarm-stacks/ssh-bastion-client-linux/sentineld/cmd/sentineld/daemon.go. This is the server-side
-// implementation of that contract; without it the Linux daemon never receives the event it's
-// waiting on and its Hop-1 tunnel never comes up (found live 2026-07-29 — see docs/ARCHITECTURE.md). nodeIndex is always 0: every REALITY relay node routes
-// the remoteassist@sentinel VLESS UUID straight to the same bastion:22022 service over the swarm
-// overlay mesh (xray-relay config.template.json's 'to-bastion-ssh' outbound), so unlike the tracker
-// control channel there's no per-node reachability difference to rotate for. adminPubKey arms the
-// daemon's STANDING Hop-2 admin trust (no TTL, mirrors Windows' baked-in ADMIN_SUPPORT_KEY) so
-// bastion-initiated automated actions (IT Audit, fleet bash exec) work with no human in the loop.
+// The Linux daemon uses its own provisioning contract, unrelated to the Windows
+// 'set_remote_assist_transport' command above. This is the server-side implementation of
+// that contract; without it the daemon never receives the event it waits on and its Hop-1
+// tunnel never comes up. nodeIndex is always 0: every REALITY relay node routes the
+// remote-assist VLESS UUID to the same support service, so there is no per-node
+// reachability difference to rotate for. adminPubKey arms the daemon's standing Hop-2
+// admin trust (no TTL, mirroring the Windows client) so automated support actions work
+// without a human in the loop.
 async function emitRemoteAssistProvision(deviceId, platform, forwardPort, socket) {
   if (platform === 'linux') {
     let adminPubKey = '';

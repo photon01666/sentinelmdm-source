@@ -1,5 +1,5 @@
 // Command sentineld is the Linux Remote Assist agent — see
-// swarm-stacks/ssh-bastion-client-linux/README.md and the design plan for the full architecture.
+// ssh-bastion-client-linux/README.md and the design plan for the full architecture.
 // This build implements: CLI email/password enrollment (`enroll`) and the IT Audit Mode
 // forensics collector (`it-audit`). The Hop-1/Hop-2 tunnel daemon (`run`) is scaffolded but not
 // yet wired to a live xray/REALITY transport — see README "Status" for what's implemented vs.

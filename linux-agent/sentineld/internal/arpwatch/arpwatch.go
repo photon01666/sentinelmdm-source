@@ -1,6 +1,6 @@
 // Package arpwatch implements the Linux Remote Assist agent's ARP network-discovery scan and
 // passive ARP-sweep detection — the sentineld equivalents of the Windows bastion features
-// _ARP_SCAN_PS1 and _ARP_SWEEP_LOOP_PS1 (bastion-web.py). Both speak the SAME wire contracts, so
+// _ARP_SCAN_PS1 and _ARP_SWEEP_LOOP_PS1 (the support service). Both speak the SAME wire contracts, so
 // the bastion's last-JSON-line parsing and the server's ingestArpScanResult() /
 // ingestArpSweepEvents() consume either platform identically.
 //

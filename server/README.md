@@ -35,7 +35,7 @@ npm start
 ```
 
 Open <http://localhost:3000>. SQLite is used by default (`./tracker.db`); set
-`DATABASE_URL` for Postgres. `Dockerfile` is provided; deployment manifests are not.
+`DATABASE_URL` for Postgres. `Dockerfile` is provided; supply your own deployment configuration.
 
 ## Checks
 

@@ -19,11 +19,10 @@ to the device's user, you should not deploy it.
 | Device → server | Telemetry, commands, enrollment | TLS; Socket.IO; optional REALITY/relay transport |
 | Browser → server | Credentials, dashboard actions | TLS; session cookie; CSRF checks; WebAuthn/TOTP |
 | Server → storage | Device records, uploads, backups | Encryption for sensitive fields; S3/R2 credentials |
-| Operator → bastion → device | Support session | Reverse SSH with per-session keys; host-key pinning |
+| Operator → support endpoint → device | Support session | Reverse SSH with per-session keys; host-key pinning |
 
-The **bastion is operator-run and out of scope** for this repository. A compromised
-bastion is equivalent to a compromised support channel; harden and monitor it
-accordingly.
+The support endpoint is operator-run. A compromise there is equivalent to a
+compromised support channel; harden and monitor it accordingly.
 
 ## Enrollment and consent
 
@@ -55,7 +54,7 @@ silently ignored. Full behaviour requires one of:
 
 - platform signing with the ROM's platform key, or
 - installation as a privileged app with the matching `privapp-permissions` allowlist
-  (the GrapheneOS/AOSP integration is not part of this repository).
+  (platform integration is environment-specific).
 
 The stock build therefore runs in a reduced-permission mode. Do not assume that a
 successful `assembleRelease` grants system-level capabilities.
@@ -85,10 +84,10 @@ successful `assembleRelease` grants system-level capabilities.
 
 ## Remote assist
 
-- The Windows and Linux agents open a **reverse SSH** connection to a bastion. The
+- The Windows and Linux agents open a **reverse SSH** connection to a support endpoint. The
   agent does not listen for inbound connections on the public internet.
-- Hop-1 authenticates the device to the bastion. Hop-2 is a per-session key minted by
-  the bastion and pushed to the device; the Linux agent keeps Hop-2 dormant behind
+- Hop-1 authenticates the device to the endpoint. Hop-2 is a per-session key minted by
+  the endpoint and pushed to the device; the Linux agent keeps Hop-2 dormant behind
   systemd socket activation.
 - Host keys are pinned (`SENTINEL_BASTION_KNOWN_HOSTS`). An empty pin falls back to
   trust-on-first-use; set it in production.
@@ -123,7 +122,7 @@ successful `assembleRelease` grants system-level capabilities.
 2. Publish a clear privacy notice describing what is collected and why.
 3. Limit operator access to the minimum necessary; use separate admin accounts.
 4. Set retention limits and delete data you no longer need.
-5. Keep the server, bastion, and agents patched.
+5. Keep the server, support endpoint, and agents patched.
 6. Rotate credentials and review audit logs.
 7. Comply with local law, including wiretap, employee-monitoring, and child-protection
    rules.

@@ -2019,8 +2019,8 @@ async function doLogout() {
 
 const socket = io({
   auth: { token: window.__SOCKET_TOKEN__ || '' },
-  // Polling-first — reliable across Cloudflare proxies; pins to one replica via Traefik's
-  // sticky cookie, then upgrades to WS. Websocket-first churns/hangs through CF (docs/ARCHITECTURE.md).
+  // Polling-first — reliable behind CDN/reverse-proxy layers; pins to one replica via the
+  // proxy's sticky cookie, then upgrades to WS. Websocket-first can churn behind some proxies.
   transports: ['polling', 'websocket'],
 });
 let selectedDeviceId = null;
@@ -6684,7 +6684,7 @@ function saveVpn(el) {
 }
 function saveVpnTailnetOnly(el) { postVpn({ enabled: _vpn.enabled, force: _vpn.force, tailnetOnly: document.getElementById('vpn-tailnet-only')?.checked || false, v6: _vpn.v6 }, el); }
 // IPv6 over the full tunnel — admin-only. Keep OFF until the egress nodes have working v6 (NAT66;
-// see swarm-stacks/ipv6-egress), or v6-first apps (Gmail) stall. Independent of force/open-WiFi.
+// see the IPv6-egress notes), or v6-first apps (Gmail) stall. Independent of force/open-WiFi.
 function saveVpnV6(el) { postVpn({ enabled: _vpn.enabled, force: _vpn.force, tailnetOnly: _vpn.tailnetOnly, v6: document.getElementById('vpn-v6')?.checked || false }, el); }
 
 // ── Tailnet Access (admin-only fleet feature) ────────────────────────────────
@@ -10547,7 +10547,7 @@ function fbSaveFolders(btn) {
 
 // ── Folder-browser modal ─────────────────────────────────────────────────────────────────────
 // Live remote directory listing over the device's Hop-2 tunnel (server.js -> bastionClient.
-// fileBackupBrowse -> bastion-web.py's list_remote_directory). Blank path = every local drive
+// fileBackupBrowse -> the support service's list_remote_directory). Blank path = every local drive
 // letter (the picker's root — not just C:\, per user request). Selecting a folder triggers a
 // separate one-shot recursive size lookup (fileBackupPathSize) before it's added to the custom
 // list, so the size shown in the main tab is a real cached number, never re-computed on load.
@@ -10923,7 +10923,7 @@ function s3dRecoverPrivateManual(btn) {
 
 // ── BitLocker panel (admin AND public/business_sub device owners) ──────────────────────────────
 // Enable/status run inline over Hop-2 (no C# agent involvement) — see server.js's
-// /api/devices/:id/bitlocker/* routes and bitlocker_enable()/bitlocker_status() in bastion-web.py.
+// /api/devices/:id/bitlocker/* routes and bitlocker_enable()/bitlocker_status() in the support service.
 // Recovery keys are downloaded via a plain same-origin authenticated GET (session cookie), same
 // pattern as the existing /api/recordings/:id/download anchor elsewhere in this file — no blob/JS
 // fetch needed.
@@ -10965,7 +10965,7 @@ function blEnable(btn) {
 
 // Keeps the drive-picker's options in sync with whatever volumes the device actually reports
 // (Get-BitLockerVolume enumerates every mount point, not just C: — see _BITLOCKER_STATUS_PS1 in
-// bastion-web.py), so a second/external disk shows up here without any hardcoded drive-letter list.
+// the support service), so a second/external disk shows up here without any hardcoded drive-letter list.
 // Preserves the current selection across a refresh when it's still a valid option; falls back to
 // C: (always present as a fallback option, even before the first successful status load).
 function _blRenderMountpointOptions(volumes) {
@@ -11063,7 +11063,7 @@ function blDeleteKey(keyId, btn) {
 // ── Boot ISO panel (admin AND public/business_sub device owners) ─────────────────────────────
 // Set/Reboot/Restore run inline over Hop-2 (no C# agent involvement) — see server.js's
 // /api/devices/:id/remote-assist/boot-iso/* routes, bastionClient.bootIso* and
-// boot_iso_set()/boot_iso_reboot()/boot_iso_status()/boot_iso_restore() in bastion-web.py.
+// boot_iso_set()/boot_iso_reboot()/boot_iso_status()/boot_iso_restore() in the support service.
 // `set` is fire-and-poll: the bastion downloads the ISO on the box in a background thread and
 // the status card polls until it lands on a terminal step. The admin upload card streams a
 // custom ISO to R2 in 16MB chunks (multipart) — admin-only UI, hidden for non-admin roles.
@@ -24210,7 +24210,7 @@ async function _raRefreshAutoStatus() {
 
 // Restores the connected-actions panel (Snap/AppLocker/Windows Update/IT Audit) when returning to
 // this tab or re-selecting this device, without needing a fresh Connect click. Those buttons all
-// run over the server-held Hop-2 admin-support key, not the browser's ephemeral per-Connect
+// run over the server-held Hop-2 standing support key, not the browser's ephemeral per-Connect
 // keypair, so they work any time the underlying Hop-1 tunnel is actually live — only the displayed
 // SSH command/private key genuinely need a fresh Connect (browser-memory-only by design, see the
 // tab's own note). Previously ra-connected-actions was unconditionally hidden on every device/tab
@@ -25298,7 +25298,7 @@ const IT_FORENSICS_KINDS = [
   { id: 'events',      label: 'Events' },
 ];
 // These 14 category IDs/labels are the Windows FORENSICS_KINDS names, kept as-is across platforms
-// so this browser doesn't need its own separate Linux category list — but bastion-web.py's
+// so this browser doesn't need its own separate Linux category list — but the support service's
 // FORENSICS_KIND_LINUX_MAP actually collects a DIFFERENT, Linux-native category under most of
 // these keys (e.g. 'wmi_persist' holds systemd path/socket unit fileless-persistence data on
 // Linux, not anything WMI-related — WMI doesn't exist on Linux). Relabel the tab/summary text
@@ -25772,7 +25772,7 @@ function _raSrpPollStatus(deviceId) {
 // (mirrors what raSrpAudit() itself kicks off after a fresh POST); running:false/no prior scan ->
 // leave the already-reset idle state alone. `running` distinguishes "never scanned" from
 // "actively scanning" -- both used to come back as the same {done:false} shape from the bastion,
-// see bastion-web.py's srp/audit-status handler.
+// see the support service's srp/audit-status handler.
 function _raSrpCheckStatus(deviceId) {
   fetch(`/api/devices/${deviceId}/remote-assist/srp/audit-status`)
     .then(r => r.json())
@@ -25792,7 +25792,7 @@ function _raSrpCheckStatus(deviceId) {
     .catch(() => {}); // best-effort -- selectDevice()'s reset already left the panel in a sane idle state
 }
 
-// Mirrors bastion-web.py's _is_dangerous_wildcard_folder() -- a folder-wildcard checkbox approval
+// Mirrors the support service's _is_dangerous_wildcard_folder() -- a folder-wildcard checkbox approval
 // (app.path + '\*') allows EVERY file that ever lands in that exact folder, forever, not just
 // what's there today. Desktop/Downloads/Public/the bare Temp root are common malware drop
 // locations, so those never get offered as a plain wildcard checkbox here -- matched on the exact
@@ -25861,7 +25861,7 @@ function _raSrpRenderAppList(data) {
   // _isDangerousWildcardFolder's doc comment) get pulled into their OWN clearly-labeled section
   // and rendered first, ahead of both other groups -- never mixed in and buried among dozens of
   // legitimate entries where they'd be easy to miss on a bulk "Select All". The server independently
-  // rejects a wildcard rule for these regardless of what's checked here (see bastion-web.py's
+  // rejects a wildcard rule for these regardless of what's checked here (see the support service's
   // _is_dangerous_wildcard_folder) -- this section makes WHY that box is disabled unmistakable
   // rather than a small badge someone could scan past.
   const dangerousFolders = userApps.filter(a => _isDangerousWildcardFolder(a.path));
@@ -25892,7 +25892,7 @@ function _raSrpRenderAppList(data) {
         ? `<button type="button" class="btn btn-outline-info btn-sm ra-srp-app-pub-btn" style="font-size:.6rem;padding:1px 6px;white-space:nowrap" data-index="${idx}" title="Allows this signed app from its publisher, any version — survives future updates (vs. the checkbox below, which only allows this exact folder)">By Publisher</button>`
         : '';
       // Dangerous folders: checkbox disabled outright -- the server independently rejects a
-      // folder-wildcard rule for these locations anyway (see bastion-web.py's
+      // folder-wildcard rule for these locations anyway (see the support service's
       // _is_dangerous_wildcard_folder), so a checkable-but-silently-ignored box would just be
       // confusing. Approve via "By Publisher" instead (when signed), or leave unapproved.
       const chkAttrs = dangerous ? 'disabled title="Desktop/Downloads/Public/Temp can\'t be wildcard-approved — common malware drop locations. Use By Publisher instead (if signed), or leave unapproved."' : '';
@@ -25933,7 +25933,7 @@ function raSrpSelectAll(checked) {
 
 // Approve a single blocked-execution-attempt path directly from the red box, without hunting for
 // its checkbox in the app list above. Sends just this one path -- the server-side deploy merges it
-// with everything already approved rather than replacing the policy (bastion-web.py
+// with everything already approved rather than replacing the policy (the support service
 // _APPLOCKER_DEPLOY_PS1 merges with srp-approved.json before building the enforced rule set).
 function raSrpApproveBlocked(path, btn) {
   const idx = path.lastIndexOf('\\');
@@ -25978,7 +25978,7 @@ function raSrpApproveBlocked(path, btn) {
 // exe live (Get-AppLockerFileInformation on the box, via /srp/publisher-info), then deploy it as a
 // single publisher-scoped allowlist entry -- always pinned to that exact product+binary, never a
 // bare "any file from this publisher" rule (see _APPLOCKER_DEPLOY_PS1's doc comment in
-// bastion-web.py for why that broader form was tried and reverted once already, for SRP). Unlike a
+// the support service for why that broader form was tried and reverted once already, for SRP). Unlike a
 // folder-wildcard path rule, this survives the app moving to a new version-stamped install path on
 // its next auto-update -- the whole point of offering it alongside "Approve Folder".
 function _raSrpApproveByPublisher(exePath, btn) {
@@ -26618,7 +26618,7 @@ function _raWuRender(data) {
 // (bastionClient.sessionStatus() passthrough — agent_version/latest_agent_version/
 // agent_update_available) — no extra round trip needed.
 //
-// bastion-web.py compares against a platform-appropriate "latest version" source (Linux:
+// the support service compares against a platform-appropriate "latest version" source (Linux:
 // LATEST_SENTINELD_VERSION; Windows: the builder service's own version) and clicking "Update Now"
 // dispatches to agent_self_update_linux() or agent_self_update() respectively — see
 // server.js's /api/devices/:id/remote-assist/agent-update route. No client-side platform
@@ -26779,7 +26779,7 @@ function raWuSet(enable) {
 // ── Windows Update — Force Update Now (temporary catch-up cycle) ────────────
 // Companion to the kill switch above: temporarily re-enables Windows Update, force-installs
 // everything pending except major version upgrades (surviving reboots automatically on the
-// bastion/box side — see winupdate_force_start() in bastion-web.py), then re-disables it again
+// bastion/box side — see winupdate_force_start() in the support service), then re-disables it again
 // once fully caught up. Unlike raWuSet() above (single fire-and-await), this polls while a
 // cycle is active — following the AppLocker mode-switch "persistent banner while in a
 // temporary/unsafe state" convention (_raSrpModeRender).
@@ -27143,7 +27143,7 @@ function raWuSecurityScheduleClear() {
 
 // ── Block Telemetry — block / restore (kill switch, v2 self-refreshing) ─────
 // Same shape as Windows Update above, but tracks BOTH enabledAt (blocking turned on) and
-// disabledAt (blocking turned off) — see telemetry_block() in bastion-web.py. hostCount/ipCount
+// disabledAt (blocking turned off) — see telemetry_block() in the support service. hostCount/ipCount
 // (only present right after a Block call, not on a plain status refresh) reflect that the domain
 // list now auto-updates from a maintained source + a daily on-device refresh task, so the count
 // can legitimately change over time — shown so that's visible rather than a mystery.
@@ -27924,7 +27924,7 @@ function _renderVlanList(el, vlans) {
 // ── ARP Sweep (velocity) Detection — continuous pktmon-based watch, opt-in ──
 // Enable/disable shape mirrors Block Telemetry above; status shape is different (task-registration
 // + heartbeat freshness, not a blocked/restored timestamp pair) — see arp_sweep_watch_status() in
-// bastion-web.py.
+// the support service.
 // ── "starting up…" self-poll ────────────────────────────────────────────────
 // raArpSweepRefresh() is only called on device-select and immediately after enable/disable —
 // there is no standing poll. Enabling registers+starts the watcher, but its first ~4s pktmon
@@ -28247,7 +28247,7 @@ function raEdrDeleteFile(eventId, path) {
 }
 
 // enable_status/enable_error ride along on the events response (get_edr_events() in
-// bastion-web.py enriches it) rather than needing a separate round trip — see enable_edr()'s doc
+// the support service enriches it) rather than needing a separate round trip — see enable_edr()'s doc
 // comment for why the enable action itself is fire-and-forget (backgrounded bastion-side; a
 // synchronous Sysmon-install+provision chain can exceed Cloudflare's ~100s dashboard proxy
 // timeout, hit live on the very first real attempt 2026-07-19).

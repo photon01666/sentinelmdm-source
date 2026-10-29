@@ -14,7 +14,7 @@ module.exports = () => {
 // True only when the request's ACTUAL TCP peer is loopback — i.e. an in-container/internal probe
 // (Docker HEALTHCHECK, route/smoke checks, local tooling). We deliberately use the socket peer, NOT
 // X-Forwarded-For, so an external client can't spoof `127.0.0.1` to suppress the alert: proxied
-// requests always arrive from the Traefik/cloudflared overlay peer, never loopback.
+// requests always arrive from the reverse-proxy overlay peer, never loopback.
 function isLoopbackPeer(req) {
   const a = req.socket?.remoteAddress || '';
   return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';

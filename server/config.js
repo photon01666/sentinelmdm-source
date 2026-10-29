@@ -228,7 +228,7 @@ const PUBLIC_USER_DEFAULT_FEATURES = {
 // Curated ISOs the WebUI "Boot ISO" RA panel can boot a Windows box into. Each entry
 // is { id, name, url (public R2 URL), size (bytes), md5, sha256, isoFile (filename on
 // the box + GRUB findiso path), kernel, initrd (paths INSIDE the ISO's /live/ dir) }.
-// The download/verify/bcdedit flow lives in bastion-web.py (_BOOT_ISO_STAGE_PS1); the
+// The download/verify/bcdedit flow lives in the support service (_BOOT_ISO_STAGE_PS1); the
 // box downloads the ISO directly from the configured public OTA URL (never through
 // the tunnel), verifies SHA-256, then points the Boot Manager at a standalone GRUB on
 // the ESP.

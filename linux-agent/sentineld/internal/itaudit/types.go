@@ -1,5 +1,5 @@
 // Package itaudit is the Linux IT Audit Mode forensics collector — the Linux counterpart to
-// bastion-web.py's FORENSICS_KINDS / _FORENSICS_PS1. See the design plan §5.1 for the full
+// the support service's FORENSICS_KINDS / _FORENSICS_PS1. See the design plan §5.1 for the full
 // category-by-category mapping from the Windows original.
 //
 // Every category collector returns a guaranteed-parseable Result even on partial failure (design

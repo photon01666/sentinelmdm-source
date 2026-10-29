@@ -1,10 +1,10 @@
-// Server-to-bastion bridge — thin fetch wrapper the tracker/worker use to reach bastion-web.py's
+// Server-to-bastion bridge — thin fetch wrapper the tracker/worker use to reach the support service's
 // session/forensics/appcontrol/winupdate API for SentinelRemoteAssist ("remote_assist") devices.
 //
-// bastion-web.py itself stays untouched in its existing (Tailscale-only, human-operator, ad hoc
+// the support service itself stays untouched in its existing (Tailscale-only, human-operator, ad hoc
 // no-account) responsibilities — this module is purely an ADDITIVE swarm-internal caller. It
 // authenticates with a new service-to-service secret (sentinel_bastion_internal_key) that turns on
-// bastion-web.py's already-present-but-currently-unset BASTION_UI_KEY check for the first time,
+// the support service's already-present-but-currently-unset BASTION_UI_KEY check for the first time,
 // scoped to these calls only; the human-operator Tailscale WebUI keeps its existing access path.
 //
 // ⚠️ This module never touches an SSH private key. There is no in-browser terminal and no relay —
@@ -125,7 +125,7 @@ async function provisionSession(deviceId, accountId, hop1PublicKey, agentPlatfor
 
 // Pushes the current SentinelMDM device name so the bastion shows it instead of the raw
 // "ra-<hash>" label everywhere a human sees it (session cards, Signal alert text) — see
-// bastion-web.py's display_name_for() doc comment. Called on rename (server.js's
+// the support service's display_name_for() doc comment. Called on rename (server.js's
 // pushDeviceDisplayNameToBastion) and opportunistically after every provisionSession() call
 // (session create/reconnect) for self-healing, so a session that missed a rename push still
 // picks up the current name the next time the device connects.
@@ -162,7 +162,7 @@ async function sessionStatus(deviceId) {
   catch (e) { if (e.status === 404) return { connected: false, neverProvisioned: true }; throw e; }
 }
 
-// "Latest available" Windows agent version — see bastion-web.py's get_latest_agent_version() doc
+// "Latest available" Windows agent version — see the support service's get_latest_agent_version() doc
 // comment (bastion-side 5-min cache; this call is cheap). Also surfaced per-device on every
 // sessionStatus() row (agent_update_available/latest_agent_version) — this standalone getter is
 // for the admin panel's page-level "what's the newest build" display, not per-device polling.
@@ -170,7 +170,7 @@ async function getLatestAgentVersion(force = false) {
   return bastionGet(`/api/agent/latest-version${force ? '?force=1' : ''}`);
 }
 
-// Pushes+cuts over the agent on ONE device — see bastion-web.py's agent_self_update() doc comment
+// Pushes+cuts over the agent on ONE device — see the support service's agent_self_update() doc comment
 // for the SCP-push mechanism. accountId/adminAgent are supplied by the CALLER (server.js already
 // knows the owning account + its type from devices/users) rather than looked up bastion-side.
 // Fleet-wide "Update Agent" reuses this same per-device call via server.js's existing
@@ -308,7 +308,7 @@ async function appControlEvents(deviceId, params = {}) {
   return bastionGet(`/api/sessions/${encodeURIComponent(label)}/appcontrol/events${qs ? '?' + qs : ''}`);
 }
 
-// Linux Application Control (fapolicyd) — see bastion-web.py's own doc comment on
+// Linux Application Control (fapolicyd) — see the support service's own doc comment on
 // linux_appcontrol_status()/linux_appcontrol_enable() for why this is a separate, simpler API
 // than the Windows AppLocker one above (fapolicyd's allowlist is the package database itself,
 // not a hand-approved per-app list).
@@ -415,7 +415,7 @@ async function winUpdateSecurityStatus(deviceId) {
 
 // Telemetry kill-switch (block/unblock/block-status) — same shape as winUpdate() above; action
 // is passed straight through, bastion-side is the actual gate (see telemetry_block() in
-// bastion-web.py).
+// the support service).
 async function blockTelemetry(deviceId, action, payload = {}) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/telemetry/${encodeURIComponent(action)}`, {
@@ -425,7 +425,7 @@ async function blockTelemetry(deviceId, action, payload = {}) {
 
 // Sentry Mode — endpoint honeypot (enable / disable / status / drain-outbox).
 // See _SENTRY_PROVISION_PS1 / sentry_enable() / sentry_disable() / sentry_status() /
-// sentry_drain() in bastion-web.py.
+// sentry_drain() in the support service.
 async function sentryEnable(deviceId, payload = {}) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/sentry/enable`, {
@@ -453,7 +453,7 @@ async function sentryDrain(deviceId) {
 
 // Screen Text Capture -- UI Automation text extraction on Windows (enable / disable / status / drain-outbox).
 // See _SCREENTEXT_PROVISION_PS1 / screentext_enable() / screentext_disable() / screentext_status() /
-// screentext_drain() in bastion-web.py.
+// screentext_drain() in the support service.
 async function screenTextEnable(deviceId) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/screentext/enable`, {
@@ -480,7 +480,7 @@ async function screenTextDrain(deviceId) {
 }
 
 // USB Lockdown — USBGuard-style device control for Windows (enable / disable / status / drain-outbox).
-// See _USB_LOCKDOWN_PS1 / usb_lockdown_block() / usb_lockdown_status() / usb_lockdown_drain() in bastion-web.py.
+// See _USB_LOCKDOWN_PS1 / usb_lockdown_block() / usb_lockdown_status() / usb_lockdown_drain() in the support service.
 async function usbLockdownEnable(deviceId, payload = {}) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/usblock/enable`, {
@@ -551,7 +551,7 @@ async function defenderExclusion(deviceId, action, payload = {}) {
 }
 
 // BitLocker — remote enable + live status. Both calls are one-shot (no bastion-side caching, no
-// persisted script on the box — see bitlocker_enable()/bitlocker_status() in bastion-web.py);
+// persisted script on the box — see bitlocker_enable()/bitlocker_status() in the support service);
 // server.js is what persists any RecoveryPassword key protectors returned into its own encrypted
 // bitlocker_keys table and the durable per-device status blob.
 async function bitlockerEnable(deviceId, mountPoint) {
@@ -565,7 +565,7 @@ async function bitlockerStatus(deviceId) {
 
 // Boot ISO — stage (download + GRUB install + bcdedit), reboot into it, live status,
 // and full restore (Windows boot manager back to normal, GRUB + ISO removed). See
-// boot_iso_set()/boot_iso_reboot()/boot_iso_status()/boot_iso_restore() in bastion-web.py.
+// boot_iso_set()/boot_iso_reboot()/boot_iso_status()/boot_iso_restore() in the support service.
 // The `entry` is the FULL catalog entry (id/name/url/size/sha256/isoFile/kernel/initrd) —
 // the server validated it against the catalog before it ever reaches here.
 async function bootIsoSet(deviceId, entry) {
@@ -589,7 +589,7 @@ async function bootIsoRestore(deviceId) {
 
 // ARP scan (network discovery) — trigger a scan now, read the cached latest result, or
 // get/set the per-device auto-scan interval. See arp_scan()/arp_scan_status()/
-// get_arp_scan_schedule()/set_arp_scan_schedule() in bastion-web.py. Raw only — server.js is
+// get_arp_scan_schedule()/set_arp_scan_schedule() in the support service. Raw only — server.js is
 // what turns a raw {ip,mac,hostname} list into persisted roster rows + spoof-detection events.
 async function arpScan(deviceId) {
   const label = labelForDevice(deviceId);
@@ -611,7 +611,7 @@ async function setArpScanSchedule(deviceId, minutes) {
 }
 
 // ARP sweep (velocity) detection — continuous pktmon-based watch, opt-in and separate from the
-// scan above. See arp_sweep_watch_enable()/_disable()/_status()/drain_events() in bastion-web.py.
+// scan above. See arp_sweep_watch_enable()/_disable()/_status()/drain_events() in the support service.
 async function arpSweepWatchEnable(deviceId) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/arp-sweep-watch`, {
@@ -634,7 +634,7 @@ async function arpSweepDrainEvents(deviceId) {
 }
 
 // ARP scan VLANs — manually-added VLAN subnets the user wants scanned alongside auto-detected
-// local interfaces. CRUD operations passed through to bastion-web.py's /arp-vlans routes.
+// local interfaces. CRUD operations passed through to the support service's /arp-vlans routes.
 async function listArpVlans(deviceId) {
   const label = labelForDevice(deviceId);
   return bastionGet(`/api/sessions/${encodeURIComponent(label)}/arp-vlans`);
@@ -654,7 +654,7 @@ async function removeArpVlan(deviceId, subnet) {
 
 // EDR (continuous behavioral telemetry) — enable/disable the Sysmon-backed --edr-watch SYSTEM
 // task, and read the accumulated rule-hit events. See enable_edr()/disable_edr()/get_edr_events()
-// in bastion-web.py. Same shape as the ARP-sweep pair above (enable/disable, separate poll-side
+// in the support service. Same shape as the ARP-sweep pair above (enable/disable, separate poll-side
 // events read) — no "drain" step here, unlike ARP sweep, since get_edr_events() reads a jsonl file
 // bastion already owns rather than something that has to be pulled+cleared over Hop-2 each time.
 async function edrEnable(deviceId, force = false) {
@@ -669,7 +669,7 @@ async function edrDisable(deviceId) {
 }
 // Wipe the accumulated findings feed ("Clear history" in the WebUI EDR panel). Bastion-side only —
 // truncates the session's events.jsonl under the shared session-ops lock; suppression config
-// (denylist, alert-suppression timers) is deliberately kept. See clear_edr_events() in bastion-web.py.
+// (denylist, alert-suppression timers) is deliberately kept. See clear_edr_events() in the support service.
 async function edrClear(deviceId) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/edr/clear`, { method: 'POST', body: '{}' });
@@ -711,7 +711,7 @@ async function phishBlock(deviceId, ip, domain) {
 
 // EDR Phase 2 — Remote Process Intervention + Dynamic Host Isolation. See edr_process_list()/
 // edr_process_kill()/delete_edr_file()/edr_isolate_block()/edr_isolate_unblock()/
-// edr_isolate_status() in bastion-web.py.
+// edr_isolate_status() in the support service.
 async function edrProcessList(deviceId) {
   const label = labelForDevice(deviceId);
   return bastionGet(`/api/sessions/${encodeURIComponent(label)}/edr/process-list`);
@@ -722,7 +722,7 @@ async function edrProcessKill(deviceId, pid) {
     method: 'POST', body: JSON.stringify({ pid }),
   });
 }
-// Phase 4 — see edr_process_suspend()/edr_process_resume() in bastion-web.py.
+// Phase 4 — see edr_process_suspend()/edr_process_resume() in the support service.
 async function edrProcessSuspend(deviceId, pid) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/edr/process-suspend`, {
@@ -760,7 +760,7 @@ async function edrIsolateStatus(deviceId) {
 // instead of fully buffering (the old downloadRelease() below awaited the ENTIRE ~150-200MB file
 // into a Buffer before server.js could send a single byte on to the client — two full sequential
 // transfers stacked back to back, found live 2026-07-19 as the main cause of the 20-30s dead wait
-// before a download even starts to appear). bastion-web.py's route is internal-authed only (not
+// before a download even starts to appear). the support service's route is internal-authed only (not
 // the general API_KEY gate), matching this bridge's other calls.
 async function streamReleaseResponse(variant, accountId) {
   const url = `${BASTION_INTERNAL_URL}/api/remote-assist-release/${encodeURIComponent(variant)}?account_id=${encodeURIComponent(String(accountId))}`;
@@ -791,7 +791,7 @@ async function buildRelease(variant, accountId) {
 }
 
 // Auto-provisioning installer variant (agent 2.0.3) — per-account exe with the account's multi-use
-// bind-any enrollment ticket + server URL + ToS version baked in (see bastion-web.py's
+// bind-any enrollment ticket + server URL + ToS version baked in (see the support service's
 // build_installer_release() + build_server.py's build_installer_exe()). The ticket is minted by
 // server.js (POST /api/ra/installer-agent) and consumed by the device's first socket handshake —
 // no login on the target PC.
@@ -901,7 +901,7 @@ async function fetchBlockedFile(deviceId, path, maxBytes, force) {
 // call (endpoint, bucket, accessKey, secretKey, region, encryptionPassword, bandwidthMbps); never
 // cached bastion-side, mirroring the fetch_blocked_file/agent-update secret-handling pattern.
 // folders (optional) is the admin's wellKnown/customPaths selection — see server.js's
-// getFileBackupFolders()/setFileBackupFolders() and bastion-web.py's run_file_backup() doc
+// getFileBackupFolders()/setFileBackupFolders() and the support service's run_file_backup() doc
 // comment. Omitted = bastion-side default (all 6 well-known folders, no custom paths).
 async function fileBackupRun(deviceId, s3, folders, kind) {
   const label = labelForDevice(deviceId);
@@ -945,7 +945,7 @@ async function fileBackupRestore(deviceId, s3, backupKey, destPath) {
 
 // "Download" builds ONE complete, already-decrypted zip instead of the raw single .tar.enc object
 // (an incremental backupKey pulls its base full backup plus every incremental up to itself, same
-// chain-replay bastion's restore already does) — see bastion-web.py's build_stitched_backup_
+// chain-replay bastion's restore already does) — see the support service's build_stitched_backup_
 // archive() doc comment. longRunning for the same reason fileBackupRestore is: rclone download +
 // decrypt + tar extract (repeated per chain entry) + zip routinely exceeds undici's default
 // timeout. The actual bytes are fetched separately (server.js streams them directly from bastion's
@@ -966,7 +966,7 @@ async function fileBackupDelete(s3, key) {
 // Derives AppLocker's own Publisher/ProductName/BinaryName identity for one exe (via
 // Get-AppLockerFileInformation on the box) — the "Approve by Publisher" action. Scoped to that
 // exact product+binary, never a bare publisher match; see _APPLOCKER_PUBLISHER_INFO_PS1's doc
-// comment in bastion-web.py for why a raw Authenticode Subject string can't be used directly here.
+// comment in the support service for why a raw Authenticode Subject string can't be used directly here.
 async function srpPublisherInfo(deviceId, path) {
   const label = labelForDevice(deviceId);
   return bastionFetch(`/api/sessions/${encodeURIComponent(label)}/srp/publisher-info`, {
@@ -990,7 +990,7 @@ async function runPowerShell(deviceId, script, opts) {
 // "Nuke" — act on (and/or mark-safe) a subset of the LAST STORED IT-audit's findings, matched by
 // exact finding text server-side against remediate_audit_findings()'s own record of what that
 // audit actually found (never a client-supplied remediation object) — see that function's doc
-// comment in bastion-web.py. Invalidate the cached audit-status read so the dashboard's next poll
+// comment in the support service. Invalidate the cached audit-status read so the dashboard's next poll
 // picks up the post-remediation finding list rather than a stale pre-Nuke cache entry.
 async function remediateAuditFindings(deviceId, removeTexts = [], safeTexts = []) {
   const label = labelForDevice(deviceId);

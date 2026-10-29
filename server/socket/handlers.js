@@ -32,10 +32,8 @@ io.on('connection', socket => {
   }
    const realityHeader = socket.handshake.headers['x-via-reality'] || '';
    // If the header is missing or just a generic "1" flag, derive the REALITY node from the
-   // Swarm node's hostname. Inside a Docker container, os.hostname() returns the container ID
-   // (e.g. "56883781a32b"), not the node name — so we read the HOST's /etc/hostname which is
-   // bind-mounted at /etc/host-hostname (see portainer-stack.yml tracker volumes). The Swarm
-   // nodes are named node-a/node-b/node-c — the last 2 chars are the node code.
+   // host's hostname. Inside a container, os.hostname() returns the container ID, so read the
+   // host name mounted at /etc/host-hostname. The hostname ends with a two-letter node code.
    const _hostHn = (() => { try { return require('fs').readFileSync('/etc/host-hostname', 'utf8').trim(); } catch { return ''; } })();
    const _hn = _hostHn || require('os').hostname();
    const _nodeFromHost = /[A-Z]{2}$/.test(_hn) ? _hn.match(/[A-Z]{2}$/)[0] : null;
@@ -410,9 +408,9 @@ io.on('connection', socket => {
                       // ⚠️ Two parts of this comment's ORIGINAL rationale are now obsolete —
                       // corrected 2026-08-03 so nobody re-derives a wrong conclusion from them:
                       //   • "the agent's baked-in sentinel-setup.ps1 already includes the
-                      //     admin-support key" — no longer true. Config.AdminHopTwoPublicKey has
+                      //     standing support key" — no longer true. Config.AdminHopTwoPublicKey has
                       //     been empty since the standing-admin-key removal; the bastion's
-                      //     admin-support key is PUSHED by /ssh-key (the 2.0.4 fix), which is why
+                      //     standing support key is PUSHED by /ssh-key (the 2.0.4 fix), which is why
                       //     it is present on a box that has ever been Connected/Regened.
                       //   • "a browser key may be lost across the scheduled-task boundary (see
                       //     PendingSshPublicKey known bug)" — fixed. Agent 2.0.6 accumulates

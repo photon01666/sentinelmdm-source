@@ -214,7 +214,7 @@ async function analyzeAlertWithAI(alertRow, deviceId, auditResult) {
   //   (b) `The operation was aborted due to timeout` — the old 60s AbortSignal firing under
   //       those same back-to-back audits (a healthy call is ~3s).
   // max_tokens/timeout now match the bastion's own long-proven call against this SAME model
-  // (`_call_opencode_analysis`, bastion-web.py: 8192 / 300s). Do NOT lower either, and do not
+  // (`_call_opencode_analysis`, the support service: 8192 / 300s). Do NOT lower either, and do not
   // drop the retry — check the finish_reason/tokensOut logged below before changing any of it.
   // Same A/B-logged shape as the bastion (8192/300s against the same model class). The outer
   // loop is the retry; the inner loop walks the model fallback chain so a provider-side model

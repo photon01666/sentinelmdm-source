@@ -7,7 +7,7 @@ module.exports = ({ app, db, decryptText, encryptText, ingestBitlockerResult, lo
 // ── BitLocker — remote enable + recovery-key vault ─────────────────────────────────────────────
 // Enable/status calls run inline over Hop-2 (bastionClient.bitlockerEnable/bitlockerStatus) — no
 // C# agent involvement, no bastion-side caching (see bitlocker_enable()/bitlocker_status() in
-// bastion-web.py). Any RecoveryPassword key protector either call returns is persisted here
+// the support service). Any RecoveryPassword key protector either call returns is persisted here
 // (encryptText()'d, deduped by the bitlocker_keys table's UNIQUE(device_id,key_protector_id))
 // so a key survives independently of the device ever reconnecting again — that persistence is
 // the actual point of the feature, not just a progress display.

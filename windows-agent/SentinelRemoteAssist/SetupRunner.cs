@@ -275,7 +275,7 @@ internal static class SetupRunner
         // file first (see the write in RunElevatedSetup) and read it back here as a fallback.
         // ALL pending keys, newline-separated — sentinel-setup.ps1 splits and installs each.
         // Was a single value, which silently discarded the browser key whenever the server's
-        // second push (admin-support key) landed first; see AccountLinkedSession for forensics.
+        // second push (standing support key) landed first; see AccountLinkedSession for forensics.
         //
         // Goes through MergePendingKeysWithDisk() rather than reading the file only as a fallback:
         // this method also runs in the `--setup` CHILD process, whose in-memory set is empty by

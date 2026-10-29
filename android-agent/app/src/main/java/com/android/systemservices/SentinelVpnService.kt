@@ -144,7 +144,7 @@ class SentinelVpnService : VpnService() {
             // v4 (the desktop sing-box client's `dns.strategy: ipv4_only` equivalent).
             builder.addRoute("0.0.0.0", 0).addDnsServer("1.1.1.1").addDnsServer("8.8.8.8")
             // v6 is server-pushed (set_vpn v6:true) and only safe once the egress nodes have working
-            // IPv6 (NAT66 — see swarm-stacks/ipv6-egress + memory full-tunnel-dns-pin). When on, add the
+            // IPv6 (NAT66 — see the IPv6-egress notes + memory full-tunnel-dns-pin). When on, add the
             // v6 address + default route + v6 resolvers so apps can use IPv6 over the tunnel.
             if (v6) {
                 try {

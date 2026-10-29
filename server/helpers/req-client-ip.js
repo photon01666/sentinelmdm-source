@@ -1,4 +1,4 @@
-// helpers/req-client-ip.js — real client IP behind Cloudflare/Traefik.
+// helpers/req-client-ip.js — real client IP behind the reverse proxy/CDN.
 //
 // A HELPER module, not a route module: it registers nothing and has NO ctx deps
 // (pure function of its argument) — hence it is wired ABOVE its earliest eager
@@ -14,10 +14,9 @@
 module.exports = () => {
 
 function reqClientIp(req) {
-  // Behind Cloudflare (edge -> cloudflared tunnel -> Traefik -> here) the first
-  // x-forwarded-for hop is a Cloudflare/tunnel address, NOT the visitor. Cloudflare
-  // always sends the true client in CF-Connecting-IP, so prefer it. The origin is only
-  // reachable via the tunnel, so external clients cannot spoof this header.
+  // Behind a CDN/proxy chain the first x-forwarded-for hop is a proxy address, NOT the
+  // visitor. The CDN sends the true client in CF-Connecting-IP, so prefer it. The origin
+  // is only reachable through the proxy, so external clients cannot spoof this header.
   return (req.headers?.['cf-connecting-ip'] || '').trim()
     || ((req.headers?.['x-forwarded-for'] || '').split(',')[0].trim())
     || req.socket?.remoteAddress || req.ip || null;

@@ -22,13 +22,13 @@ HOP2_ARM_FILE="/run/sentinel-ra/hop2-armed.pub"
 # only gates whether a NEW connection's AuthorizedKeysCommand lookup succeeds.
 
 # HOP2_ADMIN_PUBKEY_FILE: a SEPARATE, STANDING trust path alongside the TTL-armed one above —
-# added after actually reading the Windows bastion's real hop2_run()/ADMIN_SUPPORT_KEY code
-# (swarm-stacks/custom-images/ssh-bastion/bastion-web.py), which revealed the original design here
+# added after actually reading the Windows bastion's real hop2_run()/STANDING_SUPPORT_KEY code
+# (custom-images/ssh-bastion/the support service), which revealed the original design here
 # only accounted for the human "click Connect, get a live shell" case. In production, the bastion
 # ALSO needs to reach Hop-2 on its own for automated one-shot actions with no human in the loop —
 # arbitrary exec buttons, fleet fan-out, and (most importantly for this project) IT Audit Mode's
 # "Collect all" and any future scheduled AI-report sweep. Windows handles this by trusting one
-# fixed admin key (ADMIN_SUPPORT_KEY) UNCONDITIONALLY, always, for every customer — same posture
+# fixed admin key (STANDING_SUPPORT_KEY) UNCONDITIONALLY, always, for every customer — same posture
 # adopted here: this file (pushed post-enrollment, see cmd/sentineld/daemon.go's provision
 # handler, NOT baked into the install like Windows' admin key is, since this port already
 # committed to "never bake secrets at build time") is trusted ALWAYS, with no TTL, alongside the

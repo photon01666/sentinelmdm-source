@@ -671,7 +671,7 @@ do_approve() {
 # Bulk counterpart to do_approve() (2026-07-30) — the dashboard's Recent Decisions view groups
 # denials by process+directory so one click approves everything in a group instead of N separate
 # clicks/round-trips. `$2` is a NEWLINE-separated blob of absolute paths (same base64-encode-then-
-# decode-on-remote discipline as the single-file approve — bastion-web.py passes it as ONE quoted
+# decode-on-remote discipline as the single-file approve — the support service passes it as ONE quoted
 # shell argument, so embedded newlines survive intact). Deliberately only trusts the EXACT paths
 # the caller already saw denied — not a recursive directory walk — so this can't accidentally
 # widen trust to files that were never actually touched.
@@ -731,7 +731,7 @@ do_approve_many() {
 reapply_excluded_folders() {
     [ -f "$EXCLUDED_FOLDERS_FILE" ] || return 0
     # ⚠️ Found live 2026-08-06: this ran under the ENABLE action, whose bastion-side hop2_run
-    # timeout is only 30s (linux_appcontrol_enable(), bastion-web.py). With no bound of its own,
+    # timeout is only 30s (linux_appcontrol_enable(), the support service). With no bound of its own,
     # re-trusting a large previously-excluded folder (e.g. an operator once excluded an entire
     # project tree) would blow straight through that 30s ceiling every single Enable click,
     # orphaning a background job on the device with the dashboard stuck reporting nothing.

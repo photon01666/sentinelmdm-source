@@ -22,9 +22,9 @@ async function isDeviceAutoAuditEligible(deviceId) {
     if (dev.agent_kind !== 'remote_assist') return false;
     if (dev.platform !== 'windows' && dev.platform !== 'linux') return false;
     if (!dev.online) return false;
-    // Bastion Hop-1 reverse tunnel is separate from the Socket.IO control channel —
+    // The support Hop-1 reverse tunnel is separate from the Socket.IO control channel —
     // the device can be Socket.IO-online but have its reverse tunnel down, in which
-    // case every bastion call (runAudit / forensics / PowerShell) will silently fail.
+    // case every support call (runAudit / forensics / PowerShell) will silently fail.
     // Bail early instead of running the full 5-min poll loop only to land in the
     // stale-data guard.
     const bastionClient = require('../bastionClient');
