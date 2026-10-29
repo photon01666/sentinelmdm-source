@@ -1,6 +1,6 @@
 # SentinelMDM
 
-A self-hosted device-management platform for Android, with a browser dashboard and
+A device-management platform for Android, with a browser dashboard and
 optional remote-assistance agents for Windows and Linux.
 
 SentinelMDM is built around a **device-owner Android agent**, a **administrator
