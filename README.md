@@ -61,6 +61,23 @@ This repository is the application and agent source: the Android agent, the Andr
 client, the server, and the Windows/Linux remote-assist agents. Build prerequisites
 and optional runtime assets are documented in [`docs/BUILDING.md`](docs/BUILDING.md).
 
+### Not included in this repository
+
+This is a source release, not the upstream operator's full production tree. The
+following are intentionally excluded:
+
+- `android-bastion/` — internal Android WebView wrapper for the operator's
+  Tailscale-only support bastion.
+- `ssh-bastion/` and `bastion-web.py` — the support-bastion service and its admin UI.
+- Swarm/HA and Cloudflare deployment configuration — Traefik, Patroni/etcd/Redis HA,
+  xray relays, cloudflared, and related provisioning scripts.
+
+These are operational tooling for one hosted deployment, not part of the
+device-management product. Nothing in them is required to build or run the components
+listed above. The server's bastion bridge is configured through
+`BASTION_INTERNAL_URL` and `BASTION_INTERNAL_KEY` (see [`.env.example`](.env.example))
+and points at a support service you operate yourself.
+
 ## Requirements
 
 | Component | Toolchain |
