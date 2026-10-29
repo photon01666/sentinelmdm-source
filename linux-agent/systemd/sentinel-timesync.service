@@ -1,0 +1,15 @@
+[Unit]
+Description=SentinelMDM wait for network time sync
+Documentation=https://example.com
+# Live rescue boxes boot with a wrong RTC; sentineld's signed-auth reconnect needs the clock
+# within 60s of the server. Waits (bounded, non-fatal) for chrony/NTP sync before the daemon.
+After=network-online.target
+Wants=network-online.target
+Before=sentineld.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/sentinel-ra/timesync-wait.sh
+
+[Install]
+WantedBy=multi-user.target

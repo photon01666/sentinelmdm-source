@@ -1,0 +1,15 @@
+[Unit]
+Description=SentinelMDM Remote Assist Hop-2 dormant session socket (design plan §3)
+Documentation=https://example.com
+
+[Socket]
+# Bound to loopback only — Hop-2 is only ever reached FROM the local xray dokodemo-door forward
+# that Hop-1 terminates into, never directly from the network. Accept=yes: a fresh `sshd -i`
+# instance per connection (classic inetd-style activation), not one long-lived listener process —
+# systemd holds the bound kernel socket at effectively zero cost between sessions, and NO sshd
+# process exists at all until a connection actually arrives.
+ListenStream=127.0.0.1:2222
+Accept=yes
+
+[Install]
+WantedBy=sockets.target

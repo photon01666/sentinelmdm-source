@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SentinelMDM" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Full-screen black splash with centered shield — no circular clipping -->
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/nav_bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Disable Android 12+ default icon splash so our layer-list shows instead -->
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

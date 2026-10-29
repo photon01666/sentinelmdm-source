@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is PERMITTED, by necessity, for the captive-portal solver:
+    * the headless solver already does cleartext over RAW sockets (which bypass this config anyway), and
+    * the WebView escalation (CaptivePortalWebViewService) must load http:// portal/landing pages and the
+      NAS approval endpoints (e.g. http://198.18.32.1/reg.php) that JS-driven splashes navigate to.
+  This does NOT weaken the sensitive paths: the REALITY transport rides a localhost xray SOCKS hop and is
+  VLESS+REALITY (TLS 1.3) on the wire with an independent ECDH+ZK payload layer; the API/OTA endpoints are
+  requested over explicit https:// URLs (permitting cleartext can't downgrade a URL the code states as https).
+  The 127.0.0.1 / 10.255.255.1 domain entries are retained for clarity (the REALITY loopback hop).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true"/>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.255.255.1</domain>
+    </domain-config>
+</network-security-config>

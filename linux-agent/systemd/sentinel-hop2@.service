@@ -1,0 +1,24 @@
+[Unit]
+Description=SentinelMDM Remote Assist Hop-2 session (%i)
+Documentation=https://example.com
+
+[Service]
+# Found live: `sshd` fatals with "Missing privilege separation directory: /run/sshd" on a box
+# where the real system ssh.service has never happened to create it first — openssh-server
+# ships NO tmpfiles.d rule for /run/sshd on Debian/Ubuntu (confirmed: `dpkg -L openssh-server`
+# has no tmpfiles.d entry), it's normally created ambiently by the system's own sshd unit at
+# boot. Deliberately a plain `mkdir -p`, NOT `RuntimeDirectory=sshd` — that systemd directive
+# would tie /run/sshd's lifecycle to THIS templated service instance and delete it out from
+# under the system's real, separately-running sshd when one Hop-2 connection ends. -m 0755
+# matches the directory's standard system-wide permissions; idempotent, never touches it if
+# already present.
+ExecStartPre=/bin/mkdir -p -m 0755 /run/sshd
+# `Accept=yes` on the paired .socket means one of these is spawned PER CONNECTION and exits when
+# the connection closes — there is no resident process between sessions, only the held socket.
+ExecStart=-/usr/sbin/sshd -i -f /etc/sentinel-ra/sshd_hop2_config
+StandardInput=socket
+StandardError=journal
+# Whether THIS particular connection is allowed to authenticate at all is decided entirely by
+# hop2-authkeys.sh (via sshd_hop2_config's AuthorizedKeysCommand) reading the tmpfs arm file —
+# see design plan §3. This unit itself has no gating logic; it's just "run sshd against whatever
+# connected."

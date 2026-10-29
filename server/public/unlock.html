@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SentinelMDM — Unlock</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/5.3.2/css/bootstrap.min.css">
+  <style>
+    body { background:#0d1117; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+    .unlock-card { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:2.5rem; width:100%; max-width:380px; box-shadow:0 16px 48px rgba(0,0,0,.6); }
+    .lock-icon { font-size:3rem; margin-bottom:1rem; color:#6e7681; }
+    h1 { font-size:1.25rem; font-weight:700; color:#e6edf3; margin-bottom:.25rem; }
+    p.sub { font-size:.85rem; color:#8b949e; margin-bottom:1.75rem; }
+    label { color:#8b949e; font-size:.8rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    input[type=password] { background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:.6rem .9rem; font-size:.95rem; width:100%; transition:border-color .15s; }
+    input[type=password]:focus { outline:none; border-color:#388bfd; box-shadow:0 0 0 3px rgba(56,139,253,.15); }
+    input[type=password]::placeholder { color:#484f58; }
+    .btn-unlock { background:#238636; border:1px solid #2ea043; color:#fff; width:100%; padding:.65rem; font-weight:600; border-radius:6px; font-size:.95rem; cursor:pointer; transition:background .15s; }
+    .btn-unlock:hover:not(:disabled) { background:#2ea043; }
+    .btn-unlock:disabled { opacity:.6; cursor:not-allowed; }
+    .err { background:rgba(248,81,73,.12); border:1px solid rgba(248,81,73,.4); color:#f85149; border-radius:6px; padding:.6rem .9rem; font-size:.85rem; display:none; margin-top:1rem; }
+    .e2e-badge { font-size:.75rem; margin-top:1rem; padding:.35rem .7rem; border-radius:6px; display:inline-block; }
+    .e2e-ok   { background:rgba(35,134,54,.15); border:1px solid rgba(46,160,67,.4); color:#3fb950; }
+    .e2e-warn { background:rgba(210,153,34,.15); border:1px solid rgba(210,153,34,.4); color:#d29922; }
+    .spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #fff; border-right-color:transparent; border-radius:50%; animation:spin .65s linear infinite; vertical-align:middle; margin-right:.4rem; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="unlock-card text-center">
+    <div class="lock-icon">🔒</div>
+    <h1>Server Locked</h1>
+    <p class="sub">Enter your encryption passphrase to unlock the server.<br>This is separate from your login password.</p>
+    <form id="form" onsubmit="doUnlock(event)">
+      <div class="mb-3 text-start">
+        <label for="pp">Encryption Passphrase</label>
+        <input id="pp" type="password" placeholder="Enter passphrase…" autocomplete="current-password" autofocus>
+      </div>
+      <button id="btn" class="btn-unlock" type="submit">Unlock</button>
+      <div id="err" class="err"></div>
+    </form>
+    <div id="e2e-status"></div>
+  </div>
+  <script nonce="__CSP_NONCE__">
+    let _pubKey = null;
+
+    // Fetch server's ephemeral RSA public key and show E2E status
+    (async () => {
+      const badge = document.getElementById('e2e-status');
+      try {
+        const r = await fetch('/api/unlock-pubkey');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const jwk = await r.json();
+        _pubKey = await window.crypto.subtle.importKey(
+          'jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']
+        );
+        badge.innerHTML = '<span class="e2e-badge e2e-ok">🔒 E2E encrypted — Cloudflare cannot read your passphrase</span>';
+      } catch (e) {
+        badge.innerHTML = '<span class="e2e-badge e2e-warn">⚠️ E2E unavailable — passphrase protected by TLS only</span>';
+      }
+    })();
+
+    async function doUnlock(e) {
+      e.preventDefault();
+      const pp  = document.getElementById('pp').value.trim();
+      const btn = document.getElementById('btn');
+      const err = document.getElementById('err');
+      if (!pp) return;
+      err.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Unlocking…';
+      try {
+        let body;
+        if (_pubKey) {
+          const enc = await window.crypto.subtle.encrypt(
+            { name: 'RSA-OAEP' },
+            _pubKey,
+            new TextEncoder().encode(pp)
+          );
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
+          body = JSON.stringify({ encryptedPassphrase: b64 });
+        } else {
+          body = JSON.stringify({ passphrase: pp });
+        }
+        const r = await fetch('/api/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body
+        });
+        if (r.ok) {
+          window.location.href = '/';
+        } else {
+          const d = await r.json().catch(() => ({}));
+          err.textContent = d.error || 'Wrong passphrase';
+          err.style.display = 'block';
+          btn.disabled = false;
+          btn.innerHTML = 'Unlock';
+          document.getElementById('pp').select();
+        }
+      } catch {
+        err.textContent = 'Network error — try again';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = 'Unlock';
+      }
+    }
+  </script>
+</body>
+</html>

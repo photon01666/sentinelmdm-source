@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark blue rounded square background for the logo icon -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#1e3a5f"
+        android:endColor="#0d1f36"
+        android:angle="135" />
+    <corners android:radius="12dp" />
+</shape>

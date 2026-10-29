@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin>
+    <uses-policies>
+        <force-lock />
+        <wipe-data />
+        <watch-login />
+        <reset-password />
+        <!-- Required for setKeyguardDisabledFeatures() — Force PIN / disable biometrics.
+             On Android ≤15 this policy declaration is the gate.  On Android 16+ the gate
+             is MANAGE_DEVICE_POLICY_KEYGUARD (internal|role), handled via the ROM patch
+             (patch-keyguard-agent.py).  Declaring it here keeps both paths happy. -->
+        <disable-keyguard-features />
+        <!-- Required for setScreenCaptureDisabled() on some Android versions. -->
+        <disable-camera />
+    </uses-policies>
+</device-admin>

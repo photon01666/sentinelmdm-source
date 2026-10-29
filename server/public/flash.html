@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SentinelOS — Web Flasher</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=3" />
+  <link rel="stylesheet" href="/vendor/bootstrap/5.3.2/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <style>
+    body { background:#000; color:#e9ecef; min-height:100vh; }
+    .flash-wrap { max-width: 820px; margin: 0 auto; padding: 24px 14px 80px; }
+    .card-dk { background:#0b0b0c; border:1px solid rgba(255,255,255,.12); border-radius:14px; }
+    .step-dot { width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;flex:0 0 auto; }
+    .step-dot.todo { background:rgba(255,255,255,.07); color:#888; }
+    .step-dot.active { background:#0d6efd; color:#fff; }
+    .step-dot.done { background:#198754; color:#fff; }
+    .step-dot.err  { background:#dc3545; color:#fff; }
+    #log { background:#08080a; border:1px solid rgba(255,255,255,.1); border-radius:10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; padding:12px; height:230px; overflow:auto; white-space:pre-wrap; }
+    .log-info{color:#9ec5fe} .log-ok{color:#75b798} .log-warn{color:#ffda6a} .log-err{color:#ea868f}
+    .pct-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden}
+    .pct-fill{height:100%;width:0;background:#0d6efd;transition:width .2s}
+    code.kbd{background:#1a1a1d;border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-size:.85em}
+    .req-banner{background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);border-radius:10px}
+    .gate-banner{background:rgba(13,110,253,.08);border:1px solid rgba(13,110,253,.3);border-radius:10px}
+  </style>
+</head>
+<body>
+<div class="flash-wrap">
+
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <img src="/logo.png?v=2" alt="SentinelOS" style="height:34px" onerror="this.style.display='none'">
+    <h4 class="mb-0 fw-bold">SentinelOS Web Flasher</h4>
+    <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-1">Pixel · integrated build</span>
+    <a href="/" class="btn btn-sm btn-outline-secondary ms-auto"><i class="bi bi-arrow-left"></i> Dashboard</a>
+  </div>
+
+  <!-- Tier explainer: this tool is the DEEP path; the agent path needs no flashing -->
+  <div class="gate-banner p-3 mb-3 small">
+    <i class="bi bi-info-circle me-1 text-info"></i>
+    This installs the <strong>fully-integrated SentinelOS build</strong> onto a <strong>Google Pixel</strong> — the OS-level option.
+    Just want monitoring on a phone you already use (any brand)? You don't need this — use the
+    <a href="https://example.com/docs/device-owner-setup" target="_blank" rel="noopener" class="link-info">Device Owner agent install</a> instead (no flashing, no wipe).
+  </div>
+
+  <!-- WebUSB support gate -->
+  <div id="nowebusb" class="req-banner p-3 mb-3 small d-none">
+    <i class="bi bi-exclamation-triangle me-1 text-warning"></i>
+    Your browser doesn't expose <strong>WebUSB</strong>. Use desktop <strong>Chrome, Edge, or another Chromium browser</strong> over HTTPS. Firefox and Safari are not supported.
+  </div>
+
+  <!-- Requirements -->
+  <div class="card-dk p-3 p-md-4 mb-3">
+    <div class="fw-semibold mb-2"><i class="bi bi-list-check me-1"></i> Before you start</div>
+    <ul class="small text-secondary mb-0" style="line-height:1.7">
+      <li>A supported <strong>Google Pixel</strong> with an <strong>unlocked bootloader</strong> (Settings → Developer options → <em>OEM unlocking</em>, then <code class="kbd">fastboot flashing unlock</code>).</li>
+      <li>A <strong>USB-C data cable</strong> and desktop <strong>Chrome/Edge</strong>.</li>
+      <li><strong class="text-warning">Flashing erases the device.</strong> Back up anything you need first. (This is different from the agent install, which does not wipe.)</li>
+      <li>You're signed in — this binds the device to your account and starts your <strong>30-day OS trial</strong>.</li>
+    </ul>
+  </div>
+
+  <!-- Stepper -->
+  <div class="card-dk p-3 p-md-4 mb-3">
+    <div class="d-flex flex-column gap-3">
+      <div class="d-flex align-items-center gap-3"><div id="dot-1" class="step-dot todo">1</div><div><div class="fw-semibold">Connect device in bootloader/fastboot mode</div><div class="small text-secondary">Power off, then hold <strong>Volume Down + Power</strong> until you see FASTBOOT. Plug in.</div></div></div>
+      <div class="d-flex align-items-center gap-3"><div id="dot-2" class="step-dot todo">2</div><div><div class="fw-semibold">Read device info &amp; bind hardware ID</div><div class="small text-secondary">We read the serial and start your OS trial.</div></div></div>
+      <div class="d-flex align-items-center gap-3"><div id="dot-3" class="step-dot todo">3</div><div><div class="fw-semibold">Select the SentinelOS factory image</div><div class="small text-secondary">The signed <code class="kbd">.zip</code> for your Pixel model.</div></div></div>
+      <div class="d-flex align-items-center gap-3"><div id="dot-4" class="step-dot todo">4</div><div><div class="fw-semibold">Flash</div><div class="small text-secondary">Do not unplug. The device reboots when finished.</div></div></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card-dk p-3 p-md-4 mb-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button id="btn-connect" class="btn btn-primary"><i class="bi bi-usb-plug me-1"></i> Connect device</button>
+      <button id="btn-image" class="btn btn-outline-light" disabled><i class="bi bi-file-earmark-zip me-1"></i> Choose image…</button>
+      <button id="btn-flash" class="btn btn-success" disabled><i class="bi bi-lightning-charge me-1"></i> Flash SentinelOS</button>
+      <button id="btn-assist" class="btn btn-outline-warning ms-auto"><i class="bi bi-life-preserver me-1"></i> Admin Assist</button>
+    </div>
+    <input id="file-image" type="file" accept=".zip" class="d-none" />
+
+    <div id="devinfo" class="small text-secondary mt-3 d-none">
+      <span class="me-3"><i class="bi bi-cpu me-1"></i>Product: <span id="di-product" class="text-light">—</span></span>
+      <span class="me-3"><i class="bi bi-upc-scan me-1"></i>Serial: <span id="di-serial" class="text-light">—</span></span>
+      <span><i class="bi bi-shield-lock me-1"></i>Bootloader: <span id="di-unlocked" class="text-light">—</span></span>
+    </div>
+
+    <div class="mt-3">
+      <div class="d-flex justify-content-between small text-secondary mb-1"><span id="pct-label">Idle</span><span id="pct-num">0%</span></div>
+      <div class="pct-bar"><div id="pct-fill" class="pct-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Trial state -->
+  <div id="trial-box" class="card-dk p-3 mb-3 small d-none">
+    <i class="bi bi-clock-history me-1 text-info"></i>
+    OS trial: <strong id="trial-status">—</strong> · <span id="trial-days">—</span>
+  </div>
+
+  <!-- Log -->
+  <div class="card-dk p-3 p-md-4">
+    <div class="d-flex align-items-center mb-2"><span class="fw-semibold"><i class="bi bi-terminal me-1"></i> Activity log</span><button id="btn-copylog" class="btn btn-sm btn-outline-secondary ms-auto">Copy</button></div>
+    <div id="log"></div>
+  </div>
+
+  <p class="text-secondary small mt-3 mb-0">
+    Trouble? Click <strong>Admin Assist</strong> and a human will reach out. The flasher never uploads your device data — flashing happens locally over USB from your browser.
+  </p>
+</div>
+
+<script type="module">
+// android-fastboot (kdrag0n) — the same WebUSB fastboot lib GrapheneOS's web installer uses.
+import * as fastboot from "/vendor/android-fastboot/1.1.3/fastboot.min.mjs";
+
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+let device = null;          // FastbootDevice
+let imageBlob = null;       // selected factory zip
+let boundSerial = null;
+
+function log(msg, cls = "info") {
+  const line = document.createElement("div");
+  line.className = "log-" + cls;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setDot(n, state) { const d = $("dot-" + n); if (d) d.className = "step-dot " + state; }
+function setPct(label, n) {
+  $("pct-label").textContent = label;
+  const pct = Math.max(0, Math.min(100, Math.round(n)));
+  $("pct-num").textContent = pct + "%";
+  $("pct-fill").style.width = pct + "%";
+}
+
+// ── WebUSB support gate ──────────────────────────────────────────────────────
+if (!("usb" in navigator)) {
+  $("nowebusb").classList.remove("d-none");
+  $("btn-connect").disabled = true;
+  log("WebUSB unavailable in this browser.", "err");
+}
+
+// Surface library debug/progress lines into our log.
+try { fastboot.setDebugLevel(1); } catch {}
+
+// ── Admin Assist ─────────────────────────────────────────────────────────────
+async function adminAssist(stage, detail) {
+  try {
+    await fetch("/api/flash/admin-assist", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage, detail: String(detail || "").slice(0, 480) }),
+    });
+    log("Admin Assist notified — someone will reach out.", "warn");
+  } catch (e) { log("Could not reach Admin Assist endpoint: " + e.message, "err"); }
+}
+$("btn-assist").addEventListener("click", () => {
+  adminAssist("manual", `product=${$("di-product").textContent} serial=${$("di-serial").textContent}`);
+});
+
+// ── Step 1: connect ──────────────────────────────────────────────────────────
+$("btn-connect").addEventListener("click", async () => {
+  setDot(1, "active");
+  try {
+    device = new fastboot.FastbootDevice();
+    log("Requesting USB device — pick your Pixel in the browser prompt…");
+    await device.connect();                       // throws if user cancels / no device
+    setDot(1, "done");
+    log("Connected over fastboot.", "ok");
+    await readDeviceInfo();
+  } catch (e) {
+    setDot(1, "err");
+    log("Connect failed: " + e.message, "err");
+    // Auto-offer help on the most common failure (no device / cancelled / driver).
+    await adminAssist("connect", e.message);
+  }
+});
+
+// ── Step 2: read info + bind hardware id (starts the 30-day OS trial) ──────────
+async function readDeviceInfo() {
+  setDot(2, "active");
+  try {
+    const product  = await device.getVariable("product").catch(() => "unknown");
+    const serial   = await device.getVariable("serialno").catch(() => "");
+    const unlocked = await device.getVariable("unlocked").catch(() => "unknown");
+    $("devinfo").classList.remove("d-none");
+    $("di-product").textContent  = product;
+    $("di-serial").textContent   = serial || "—";
+    $("di-unlocked").textContent = unlocked === "yes" ? "unlocked ✓" : unlocked;
+
+    if (unlocked !== "yes") {
+      log("Bootloader is LOCKED. Unlock it first: enable OEM unlocking, then `fastboot flashing unlock`.", "warn");
+    }
+    if (!serial) { setDot(2, "err"); log("Could not read device serial.", "err"); return; }
+
+    // Bind serial → account, start OS trial. Same-origin: session cookie travels automatically.
+    log("Binding device to your account and starting the 30-day OS trial…");
+    const r = await fetch("/api/flash/bind", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hardware_id: serial,
+        tos: { accepted: true, policy_key: "os_flash_trial", policy_version: "1" },
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setDot(2, "err");
+      log("Bind failed: " + (d.error || r.status), "err");
+      if (r.status === 409) log("This device is already registered to another account.", "err");
+      return;
+    }
+    boundSerial = serial;
+    $("trial-box").classList.remove("d-none");
+    $("trial-status").textContent = d.status || "Active";
+    $("trial-days").textContent   = (d.days_remaining ?? 7) + " day(s) remaining";
+    setDot(2, "done");
+    log(`Bound. License ${d.license_key} · ${d.days_remaining ?? 7} days.`, "ok");
+    $("btn-image").disabled = false;
+  } catch (e) {
+    setDot(2, "err");
+    log("Device info / bind error: " + e.message, "err");
+    await adminAssist("bind", e.message);
+  }
+}
+
+// ── Step 3: choose image ─────────────────────────────────────────────────────
+$("btn-image").addEventListener("click", () => $("file-image").click());
+$("file-image").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  imageBlob = f;
+  setDot(3, "done");
+  log(`Selected image: ${f.name} (${(f.size / 1e6).toFixed(1)} MB)`, "ok");
+  $("btn-flash").disabled = false;
+});
+
+// ── Step 4: flash ────────────────────────────────────────────────────────────
+$("btn-flash").addEventListener("click", async () => {
+  if (!device || !imageBlob) return;
+  if (!confirm("This will ERASE the connected Pixel and install SentinelOS. Continue?")) return;
+  $("btn-flash").disabled = true; $("btn-image").disabled = true; $("btn-connect").disabled = true;
+  setDot(4, "active");
+  try {
+    log("Flashing factory image — do NOT unplug the device.", "warn");
+    // android-fastboot understands the Pixel factory-zip layout (bootloader, radio,
+    // nested image-*.zip) and applies it via flashFactoryZip with progress callbacks.
+    await device.flashFactoryZip(imageBlob, true, onReconnect,
+      (action, item, progress) => {
+        const pct = Math.round((progress || 0) * 100);
+        setPct(`${action} ${item || ""}`.trim(), pct);
+        if (progress === 0) log(`${action} ${item || ""}`.trim());
+      });
+    setPct("Done", 100);
+    setDot(4, "done");
+    log("Flash complete. The device will reboot into SentinelOS.", "ok");
+  } catch (e) {
+    setDot(4, "err");
+    log("Flash failed: " + e.message, "err");
+    await adminAssist("flash", `${$("di-product").textContent}: ${e.message}`);
+    $("btn-flash").disabled = false; $("btn-connect").disabled = false;
+  }
+});
+
+// Some flash phases re-enumerate the USB device; re-request when asked.
+async function onReconnect() {
+  log("Device re-enumerated mid-flash — reconnecting…", "warn");
+  try { await device.connect(); log("Reconnected.", "ok"); }
+  catch (e) { log("Reconnect failed — replug and click Connect: " + e.message, "err"); }
+}
+
+$("btn-copylog").addEventListener("click", () => {
+  navigator.clipboard.writeText(logEl.textContent).then(() => log("Log copied.", "ok"));
+});
+
+log("Flasher ready. Click “Connect device”.", "info");
+</script>
+</body>
+</html>

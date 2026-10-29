@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#1b1b2a</color>
+    <color name="surface">#252538</color>
+    <color name="surface2">#2e2e48</color>
+    <color name="border">#17ffffff</color>
+    <color name="accent">#48b9ff</color>
+    <color name="accent_hover">#73caff</color>
+    <color name="text_primary">#e4e4f0</color>
+    <color name="text_muted">#7b7b9f</color>
+    <color name="danger">#ff6b75</color>
+    <color name="success">#5fbe8b</color>
+    <color name="connect_label">#0a0f18</color>
+    <!-- Splash screen -->
+    <color name="splash_background">#FF000000</color>
+    <color name="ic_launcher_background">#FF000000</color>
+    <color name="status_bar">#FF000000</color>
+    <color name="nav_bar">#FF000000</color>
+</resources>

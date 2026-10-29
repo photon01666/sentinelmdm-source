@@ -1,0 +1,5 @@
+tracker.db
+uploads/
+node_modules/
+*.log
+dev-tools/

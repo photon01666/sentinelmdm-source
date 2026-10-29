@@ -1,0 +1,6 @@
+[Unit]
+Description=Expire a stale SentinelMDM Remote Assist Hop-2 arm file (one-shot, run by the .timer)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/sentinel-ra/hop2-reap.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically expire a stale SentinelMDM Remote Assist Hop-2 arm file
+
+[Timer]
+OnUnitActiveSec=60s
+OnBootSec=60s
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

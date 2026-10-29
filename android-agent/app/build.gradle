@@ -1,0 +1,111 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+}
+
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('local.properties')
+if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
+
+// ── Deployment configuration ────────────────────────────────────────────────
+// Every endpoint is a build-time property so a self-hosted build never depends on
+// the upstream project's infrastructure:
+//   ./gradlew assembleRelease -PserverUrl=https://device.example.com -PwebUrl=https://app.example.com
+// The same values can be supplied through SENTINEL_* environment variables.
+def cfg = { String prop, String env, String fallback ->
+    (project.findProperty(prop) ?: System.getenv(env) ?: fallback).toString()
+}
+
+android {
+    namespace 'com.android.systemservices'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.android.systemservices"
+        minSdk 26
+        targetSdk 34
+        versionCode 346
+        versionName "2.26.0.29"
+        // ADMIN agent variant — built with `-PadminAgent`. Its on-device login authenticates admins +
+        // sub-users (→ admin-fleet device claim) instead of public/parent accounts.
+        buildConfigField "boolean", "ADMIN_AGENT", (project.hasProperty('adminAgent') ? "true" : "false")
+        // Deployment endpoints — override with -P<name>=... or the matching SENTINEL_* env var.
+        buildConfigField "String", "SERVER_URL",          "\"${cfg('serverUrl',  'SENTINEL_SERVER_URL',  'https://device.example.com')}\""
+        buildConfigField "String", "WEB_URL",             "\"${cfg('webUrl',     'SENTINEL_WEB_URL',     'https://app.example.com')}\""
+        buildConfigField "String", "RELAY_URL",           "\"${cfg('relayUrl',   'SENTINEL_RELAY_URL',   '')}\""
+        buildConfigField "String", "RELAY_NODES",         "\"${cfg('relayNodes', 'SENTINEL_RELAY_NODES', '')}\""
+        buildConfigField "String", "REALITY_NODES",       "\"${cfg('realityNodes',   'SENTINEL_REALITY_NODES',    '')}\""
+        buildConfigField "String", "REALITY_NODES_V6",    "\"${cfg('realityNodesV6', 'SENTINEL_REALITY_NODES_V6', '')}\""
+        buildConfigField "String", "REALITY_SNI",         "\"${cfg('realitySni',     'SENTINEL_REALITY_SNI',      'www.microsoft.com')}\""
+        buildConfigField "String", "REALITY_PUBLIC_KEY",  "\"${cfg('realityPublicKey',   'SENTINEL_REALITY_PUBLIC_KEY',   '')}\""
+        buildConfigField "String", "REALITY_SHORT_ID",    "\"${cfg('realityShortId',     'SENTINEL_REALITY_SHORT_ID',     '')}\""
+        buildConfigField "String", "REALITY_CONTROL_UUID","\"${cfg('realityControlUuid', 'SENTINEL_REALITY_CONTROL_UUID', '')}\""
+        buildConfigField "String", "DASHBOARD_HOSTS",     "\"${cfg('dashboardHosts', 'SENTINEL_DASHBOARD_HOSTS', 'example.com')}\""
+        // Optional comma-separated SHA-256 allow-list for OTA self-update (cross-signed builds).
+        buildConfigField "String", "EXPECTED_SIGNER_SHA256", "\"${cfg('expectedSignerSha256', 'SENTINEL_EXPECTED_SIGNER_SHA256', '')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            storeFile     file(keystoreProps.getProperty('KEYSTORE_PATH', '../release.keystore'))
+            storePassword keystoreProps.getProperty('KEYSTORE_PASSWORD')
+            keyAlias      keystoreProps.getProperty('KEY_ALIAS', 'release')
+            keyPassword   keystoreProps.getProperty('KEY_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "SentinelMDM-${project.hasProperty('adminAgent') ? 'Admin-' : ''}${variant.versionName}.apk"
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/INDEX.LIST', 'META-INF/io.netty.versions.properties']
+        }
+        // xray-core ships as jniLibs/arm64-v8a/libxray.so and MUST be extracted to the app's
+        // nativeLibraryDir so the Device Owner can exec it (SELinux only permits execution from
+        // the lib dir, not /data app storage). Legacy packaging = uncompressed + extracted.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'com.google.android.gms:play-services-location:21.1.0'
+
+    // Socket.IO client
+    implementation('io.socket:socket.io-client:2.1.0') {
+        exclude group: 'org.json', module: 'json'
+    }
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+}

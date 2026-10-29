@@ -1,0 +1,15 @@
+{
+  // Looser, server.js-only check. Relaxes `strict` (drops implicit-any, strict-null, and
+  // catch-unknown noise that floods an 11k-line legacy monolith) while KEEPING the structural
+  // checks that matter — "property does not exist" (TS2339) and "no-overlap comparison"
+  // (TS2367) still fire, so the Socket/SessionData seam merges catch ZK gating typos here.
+  // Run via `npm run typecheck:server`. The strict gate (tsconfig.json) stays green for the
+  // opted-in modules; this is a separate, deliberately-permissive lint over the monolith.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "checkJs": true,
+    "noEmit": true
+  },
+  "include": ["server.js", "**/*.d.ts"]
+}

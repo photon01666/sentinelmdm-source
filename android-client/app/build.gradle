@@ -1,0 +1,135 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    // NOTE: the Google Services (FCM) plugin is applied CONDITIONALLY at the bottom of
+    // this file — only when app/google-services.json is present — so the project still
+    // builds before Firebase is set up. See that block for activation steps.
+}
+
+// Deployment endpoint — override with -PserverUrl=... or SENTINEL_SERVER_URL.
+def cfg = { String prop, String env, String fallback ->
+    (project.findProperty(prop) ?: System.getenv(env) ?: fallback).toString()
+}
+def serverUrl = cfg('serverUrl', 'SENTINEL_SERVER_URL', 'https://app.example.com')
+
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('local.properties')
+if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
+
+android {
+    namespace 'com.sentinelmdm.monitor'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+        targetSdk 34
+        buildConfigField "String", "SERVER_URL", "\"${serverUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions "variant"
+
+    productFlavors {
+        // LOGIN_URL is the FULL, hard-coded landing URL the WebView opens for each
+        // variant. Hard-coded (not composed at runtime) so each flavor points at an
+        // explicit, unambiguous endpoint. The admin/subuser paths sit behind Cloudflare
+        // Access by design — the WebView walks the Access flow (cloudflareaccess.com is
+        // allow-listed in MainActivity.shouldOverrideUrlLoading) before reaching the
+        // app's own login page.
+        publicClient {
+            dimension "variant"
+            applicationId "com.sentinelmdm.monitor"
+            versionCode 23
+            versionName "2.5.7"
+            buildConfigField "String", "LOGIN_URL", "\"${serverUrl}/login\""
+            resValue "string", "flavor_app_name", "SentinelMDM"
+        }
+        adminClient {
+            dimension "variant"
+            applicationId "com.sentinelmdm.adminmonitor"
+            versionCode 26
+            versionName "2.6.8"
+            buildConfigField "String", "LOGIN_URL", "\"${serverUrl}/admin/login\""
+            resValue "string", "flavor_app_name", "SentinelMDM Admin"
+        }
+        subUsersClient {
+            dimension "variant"
+            applicationId "com.sentinelmdm.subusersmonitor"
+            versionCode 23
+            versionName "2.7.5"
+            buildConfigField "String", "LOGIN_URL", "\"${serverUrl}/admin/subusers/login\""
+            resValue "string", "flavor_app_name", "SentinelMDM SubUsers"
+        }
+    }
+
+    signingConfigs {
+        release {
+            storeFile     file(keystoreProps.getProperty('KEYSTORE_PATH', '../release.keystore'))
+            storePassword keystoreProps.getProperty('KEYSTORE_PASSWORD')
+            keyAlias      keystoreProps.getProperty('KEY_ALIAS', 'release')
+            keyPassword   keystoreProps.getProperty('KEY_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            def baseName = variant.flavorName == 'adminClient' ? 'SentinelClientAdmin'
+                         : variant.flavorName == 'subUsersClient' ? 'SentinelClientSubUsers'
+                         : 'SentinelClient'
+            outputFileName = "${baseName}-${variant.versionName}.apk"
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    // >= 1.12.0 required for WebViewFeature.WEB_AUTHENTICATION (passkeys in the WebView —
+    // without it navigator.credentials is absent and every dashboard passkey UI hides itself)
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    // Firebase Cloud Messaging. These AARs compile & ship WITHOUT google-services.json;
+    // FCM only ACTIVATES (FirebaseApp auto-initialises) once the google-services plugin is
+    // applied — which the conditional block at the bottom of this file does automatically
+    // when you add app/google-services.json. Until then the FCM code paths no-op gracefully
+    // (FirebaseApp.getApps() is empty), so the app builds and runs fine.
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    implementation 'com.google.firebase:firebase-messaging-ktx'
+}
+
+// ── FCM activation ───────────────────────────────────────────────────────────
+// Apply the Google Services plugin ONLY when the Firebase config is present, so the
+// project still builds before Firebase is set up. To enable push in the companion app:
+//   1. Create a Firebase project (package com.sentinelmdm.monitor) at console.firebase.google.com
+//   2. Download google-services.json into android-client/app/
+//   3. Rebuild — the next build wires FCM end-to-end (no code changes needed).
+if (project.file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+    logger.lifecycle('SentinelClient: google-services.json found — FCM push ENABLED.')
+} else {
+    logger.warn('SentinelClient: app/google-services.json not found — FCM push is INACTIVE ' +
+                '(the app builds fine; add the file to enable push notifications).')
+}
