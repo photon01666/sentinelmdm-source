@@ -1,0 +1,557 @@
+body { overflow: hidden; background: #000 !important; }
+
+/* Business Account compliance hide — deliberately a SEPARATE class from Bootstrap's .d-none, not
+   reused for it. applyBusinessModeTabRestrictions() (app.js) needs to hide these tabs regardless
+   of whatever style.display value applyPermissionsForDevice()/applyPlatformForDevice() already
+   set (business compliance must win over normal permission gating), while still safely restoring
+   to "whatever those functions decided" when leaving a business-mode device — using this class
+   (added/removed unconditionally each call) instead of writing style.display directly means
+   removing it never has to guess/replay the other functions' logic, it just stops overriding it. */
+.biz-hidden { display: none !important; }
+
+@keyframes emergency-flash {
+  0%, 100% { box-shadow: 0 0 0 2px #dc3545, 0 0 8px 2px rgba(220,53,69,.4); }
+  50%       { box-shadow: 0 0 0 3px #dc3545, 0 0 20px 6px rgba(220,53,69,.7); }
+}
+.emergency-active { animation: emergency-flash 1s ease-in-out infinite; }
+
+@keyframes emergency-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+.emergency-badge-pulse { animation: emergency-badge-pulse 1s ease-in-out infinite; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.status-dot.offline    { background: #adb5bd; }
+.status-dot.deep-sleep { background: #4b5c8a; box-shadow: 0 0 0 2px #c5cae9; }
+.device-item { cursor: pointer; transition: background .14s, transform .12s; user-select: none; }
+.device-item:hover    { background: var(--sentinel-hover-tint); transform: translateX(3px); }
+.device-item.selected { background: rgba(13,110,253,.22); border-left: 3px solid #0d6efd; }
+.photo-thumb { cursor: pointer; overflow: hidden; transition: transform .18s cubic-bezier(.22,.61,.36,1), box-shadow .18s; }
+.photo-thumb:hover { transform: scale(1.08) rotate(-0.7deg); box-shadow: 0 8px 28px rgba(0,0,0,.45); }
+#map { min-height: 300px; }
+/* ── Collapsible device sidebar: a thin rail that expands and PUSHES the content ── */
+/* The width is part of the flex layout, so #main-panel reflows (no overlay). JS toggles
+   .sidebar-open on hover and keeps it open for 3s after the pointer leaves (see app.js). */
+.sidebar {
+  width: 56px; min-width: 56px; flex-shrink: 0; overflow: hidden;
+  transition: width .2s cubic-bezier(.4,0,.2,1), min-width .2s cubic-bezier(.4,0,.2,1);
+}
+.sidebar.sidebar-open { width: 272px; min-width: 272px; }
+.sidebar-inner { width: 100%; height: 100%; border-right: 1px solid var(--sentinel-hairline); overflow: hidden; }
+.sidebar-inner #device-list { overflow-x: hidden; }
+/* Collapsed (rail) state — DESKTOP ONLY: hide labels/meta, center the icons & status dots.
+   On mobile the sidebar is a full-content slide-in drawer, so these must not apply there. */
+@media (min-width: 961px) {
+  .sidebar:not(.sidebar-open) .collapse-hide { display: none !important; }
+  .sidebar:not(.sidebar-open) .sidebar-head { justify-content: center; padding-left: 0; padding-right: 0; }
+  .sidebar:not(.sidebar-open) .grp-header { justify-content: center; padding-left: .2rem; padding-right: .2rem; }
+  .sidebar:not(.sidebar-open) .device-item > .d-flex { justify-content: center; }
+  .sidebar:not(.sidebar-open) .device-item { padding-left: .5rem !important; padding-right: .5rem !important; }
+}
+
+/* ── Sidebar device groups ── */
+.grp-header {
+  display: flex; align-items: center; gap: .4rem;
+  padding: .32rem .6rem; cursor: pointer; user-select: none;
+  color: var(--sentinel-text); opacity: .82; font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+  transition: background .12s;
+}
+.grp-header:hover { background: var(--sentinel-hover-tint); }
+.grp-header.sec { background: var(--sentinel-hover-tint); border-top: 1px solid var(--sentinel-hairline); }
+.grp-header.cust { font-size: .68rem; opacity: .6; font-weight: 600; padding-left: 1.15rem; text-transform: none; letter-spacing: 0; }
+.grp-header .chevron { font-size: .58rem; transition: transform .15s; flex-shrink: 0; width: .7rem; }
+.grp-header.collapsed .chevron { transform: rotate(-90deg); }
+.grp-header .grp-icon { font-size: .82rem; flex-shrink: 0; opacity: .82; }
+.grp-header .grp-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.grp-header .grp-count {
+  font-size: .6rem; background: var(--sentinel-hairline-strong); color: var(--sentinel-text);
+  border-radius: 999px; padding: .04rem .4rem; font-weight: 600; flex-shrink: 0; opacity: 1;
+}
+.grp-header .grp-act {
+  opacity: 0; background: none; border: 0; color: var(--sentinel-text);
+  font-size: .82rem; line-height: 1; padding: 0 .15rem; flex-shrink: 0;
+  transition: opacity .12s, color .12s;
+}
+.grp-header:hover .grp-act { opacity: .7; }
+.grp-header .grp-act:hover { opacity: 1; }
+.grp-body.nested .device-item { padding-left: 1.5rem; }
+.grp-empty { font-size: .68rem; color: var(--sentinel-text); opacity: .35; padding: .2rem .6rem .3rem 1.5rem; font-style: italic; }
+.grp-add-row { padding: .3rem .6rem .4rem; }
+.grp-add-btn {
+  font-size: .68rem; color: var(--sentinel-text); opacity: .5; background: none;
+  border: 1px dashed var(--sentinel-hairline-strong); border-radius: 6px;
+  padding: .2rem .5rem; width: 100%; text-align: left; white-space: nowrap;
+  transition: color .12s, border-color .12s, opacity .12s;
+}
+.grp-add-btn:hover { color: #6ea8fe; opacity: 1; border-color: rgba(110,168,254,.5); }
+
+/* Floating "move to group" popover menu (appended to <body>) */
+.grp-pop {
+  position: fixed; z-index: 2000; min-width: 190px; max-height: 340px; overflow-y: auto;
+  background: var(--sentinel-solid-panel-bg); border: 1px solid var(--sentinel-hairline-strong); border-radius: 8px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.62); padding: .3rem;
+  color: var(--sentinel-modal-text);
+}
+.grp-pop-head { font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--sentinel-modal-text); opacity: .5; padding: .25rem .55rem; }
+.grp-pop-item {
+  display: flex; align-items: center; gap: .45rem; padding: .35rem .55rem; border-radius: 5px;
+  font-size: .8rem; color: var(--sentinel-modal-text); opacity: .85; cursor: pointer; white-space: nowrap;
+}
+.grp-pop-item:hover { background: rgba(13,110,253,.18); opacity: 1; color: var(--sentinel-modal-text); }
+.grp-pop-item.active { color: #6ea8fe; opacity: 1; }
+.grp-pop-sep { height: 1px; background: var(--sentinel-hairline); margin: .25rem .2rem; }
+
+/* ── Device Overview groups (collapsible card sections) ── */
+.ov-grp-header {
+  display: flex; align-items: center; gap: .55rem; cursor: pointer; user-select: none;
+  padding: .5rem .25rem; margin: .4rem 0 .35rem; color: var(--sentinel-text);
+  border-bottom: 1px solid var(--sentinel-hairline);
+}
+.ov-grp-header:hover { opacity: .8; }
+.ov-grp-header.sec  { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; opacity: .8; }
+.ov-grp-header.cust { font-size: .8rem; font-weight: 600; opacity: .62; padding-left: 1.4rem; border-bottom-color: var(--sentinel-hover-tint); }
+.ov-grp-header .chevron { font-size: .65rem; transition: transform .15s; width: .8rem; flex-shrink: 0; opacity: .7; }
+.ov-grp-header.collapsed .chevron { transform: rotate(-90deg); }
+.ov-grp-icon  { opacity: .82; }
+.ov-grp-label { flex: 0 0 auto; }
+.ov-grp-count {
+  font-size: .68rem; background: var(--sentinel-hairline-strong); color: var(--sentinel-text);
+  border-radius: 999px; padding: .05rem .5rem; font-weight: 600;
+}
+.ov-grp-add, .ov-grp-act {
+  margin-left: auto; background: none; border: 1px solid var(--sentinel-hairline-strong);
+  color: var(--sentinel-text); opacity: .55; font-size: .7rem; border-radius: 6px; padding: .12rem .5rem;
+  line-height: 1.4; transition: color .12s, border-color .12s, opacity .12s; flex-shrink: 0;
+}
+.ov-grp-act { border: none; padding: .12rem .35rem; }
+.ov-grp-add:hover, .ov-grp-act:hover { color: #6ea8fe; opacity: 1; border-color: rgba(110,168,254,.5); }
+.ov-grp-body { margin-bottom: .65rem; }
+.ov-grp-empty { font-size: .8rem; color: var(--sentinel-text); opacity: .35; font-style: italic; padding: .4rem 0 .6rem 1.4rem; }
+
+/* ── Styled prompt/confirm modal (replaces the native prompt()/confirm()) ── */
+.ui-modal-backdrop {
+  position: fixed; inset: 0; z-index: 2100; display: flex; align-items: center; justify-content: center;
+  background: rgba(4,6,12,.62); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  padding: 16px; opacity: 0; transition: opacity .16s ease;
+}
+.ui-modal-backdrop.show { opacity: 1; }
+.ui-modal {
+  width: 100%; max-width: 440px; background: var(--sentinel-modal-bg); color: var(--sentinel-modal-text);
+  border: 1px solid var(--sentinel-hairline); border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.6); overflow: hidden;
+  transform: translateY(10px) scale(.97); transition: transform .18s cubic-bezier(.22,.61,.36,1);
+}
+.ui-modal-backdrop.show .ui-modal { transform: translateY(0) scale(1); }
+.ui-modal-head { display: flex; align-items: center; gap: .55rem; padding: .95rem 1.1rem .25rem; font-size: 1.02rem; font-weight: 700; }
+.ui-modal-head i { color: #6ea8fe; font-size: 1.05rem; }
+.ui-modal-body { padding: .55rem 1.1rem 1rem; }
+.ui-modal-label { display: block; font-size: .82rem; color: var(--sentinel-modal-text); opacity: .7; margin-bottom: .45rem; font-weight: 500; }
+.ui-modal-input {
+  width: 100%; background: var(--sentinel-input-bg); border: 1px solid var(--sentinel-hairline-strong); color: var(--sentinel-modal-text);
+  border-radius: 9px; padding: .6rem .75rem; font-size: .95rem; outline: none;
+  transition: border-color .14s, box-shadow .14s;
+}
+.ui-modal-input::placeholder { color: var(--sentinel-modal-text); opacity: .4; }
+.ui-modal-input:focus { border-color: #3d8bfd; box-shadow: 0 0 0 3px rgba(61,139,253,.25); }
+.ui-modal-msg { margin: 0; color: var(--sentinel-modal-text); opacity: .85; font-size: .9rem; line-height: 1.5; }
+.ui-modal-foot { display: flex; justify-content: flex-end; gap: .5rem; padding: .3rem 1.1rem 1rem; }
+.cmd-section h6 { color: #6c757d; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+.photo-wrap { position: relative; }
+.photo-del { position: absolute; top: 4px; right: 4px; opacity: 0; transition: opacity .15s; }
+.photo-wrap:hover .photo-del { opacity: 1; }
+.signal-bars { font-family: monospace; letter-spacing: 1px; }
+/* Solid navy body (not the flat, semi-transparent Bootstrap default) plus a left-edge status
+   stripe so a glance at the grid reads device state by color, not just the small status-dot. */
+.device-card {
+  cursor: pointer;
+  background: var(--sentinel-card-bg) !important;
+  border: 1px solid var(--sentinel-hairline);
+  border-left: 3px solid var(--sentinel-hairline-strong);
+  box-shadow: 0 2px 10px var(--sentinel-card-shadow);
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .18s cubic-bezier(.22,.61,.36,1);
+}
+.device-card:has(.status-dot.online)     { border-left-color: #22a86a; }
+.device-card:has(.status-dot.deep-sleep) { border-left-color: #6a7fd6; }
+.device-card:has(.status-dot.offline)    { border-left-color: var(--sentinel-hairline-strong); }
+.device-card:hover { border-color: #0d6efd !important; background: rgba(13,110,253,.07) !important; box-shadow: 0 6px 24px rgba(13,110,253,.18) !important; transform: translateY(-3px) scale(1.01); }
+
+/* ── Overview fleet-stats row (online/offline counter + needs-attention toggle) ── */
+.ov-stat-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: var(--sentinel-card-bg);
+  border: 1px solid var(--sentinel-hairline);
+  border-radius: 10px;
+  padding: .45rem .85rem;
+  box-shadow: 0 2px 10px var(--sentinel-card-shadow);
+  font-size: .8rem;
+  white-space: nowrap;
+}
+.ov-stat-num { font-size: 1.02rem; color: #fff; }
+.ov-stat-btn {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: #ffc107; cursor: pointer; font-size: 1.02rem; line-height: 1;
+  border-radius: 6px; transition: color .12s, text-shadow .12s;
+}
+.ov-stat-btn:hover { color: #ffd75e; text-shadow: 0 0 8px rgba(255,193,7,.35); }
+.ov-stat-attention.active {
+  border-color: rgba(255,193,7,.65);
+  box-shadow: 0 0 0 3px rgba(255,193,7,.18), 0 2px 10px var(--sentinel-card-shadow);
+}
+
+/* ── Status dot online glow pulse ── */
+@keyframes dotGlow {
+  0%, 100% { background: #198754; box-shadow: 0 0 0 2px #d1e7dd, 0 0 0 0 rgba(25,135,84,0); }
+  50%       { background: #22a86a; box-shadow: 0 0 0 3px rgba(25,135,84,.4), 0 0 12px 4px rgba(25,135,84,.22); }
+}
+/* ── Status dot online glow (static: the old infinite box-shadow animation repainted
+   every dot on every frame and was a constant CPU/GPU drag, incl. while dragging the map) ── */
+.status-dot.online { background: #198754; box-shadow: 0 0 0 2px #d1e7dd; }
+
+/* ── Toast slide-in / slide-out ── */
+@keyframes toastIn {
+  from { transform: translateX(115%) scale(0.86); opacity: 0; }
+  to   { transform: translateX(0)    scale(1);    opacity: 1; }
+}
+@keyframes toastOut {
+  from { transform: translateX(0)    scale(1);    opacity: 1; }
+  to   { transform: translateX(115%) scale(0.82); opacity: 0; }
+}
+.toast-slide-in  { animation: toastIn  0.34s cubic-bezier(.22,.68,0,1.2) forwards; }
+.toast-slide-out { animation: toastOut 0.26s ease-in forwards; }
+
+/* ── Tab content fade + lift ── */
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tab-animate-in { animation: tabFadeIn 0.24s ease-out forwards; }
+
+/* ── Device card pop entrance ── */
+@keyframes cardPop {
+  0%   { opacity: 0; transform: scale(0.80) translateY(16px); }
+  58%  { opacity: 1; transform: scale(1.06) translateY(-5px); }
+  78%  { transform: scale(0.96) translateY(2px); }
+  91%  { transform: scale(1.02) translateY(-1px); }
+  100% { transform: scale(1)    translateY(0); }
+}
+.card-enter { animation: cardPop 0.45s cubic-bezier(.22,.61,.36,1) both; }
+
+/* ── Button press feedback ── */
+.btn {
+  transition: color .15s ease-in-out, background-color .15s ease-in-out,
+              border-color .15s ease-in-out, box-shadow .15s ease-in-out,
+              transform .1s ease;
+}
+.btn:active:not(:disabled) { transform: scale(0.91); }
+
+/* ── Navbar ambient glow ── */
+@keyframes navGlow {
+  0%, 100% { box-shadow: 0 1px 6px rgba(0,0,0,0.5); }
+  50%       { box-shadow: 0 1px 22px rgba(13,110,253,0.28), 0 1px 8px rgba(0,0,0,0.5); }
+}
+/* ── Navbar ambient glow (static: an infinite blurred box-shadow on a full-width bar
+   forces a large repaint every frame — constant pressure that shows up as map jank) ── */
+.navbar {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.5);
+}
+
+/* ── Safe-area insets ── */
+/* Push modals below the status bar on edge-to-edge displays */
+.modal {
+  padding-top: env(safe-area-inset-top, 0px) !important;
+}
+
+/* Prevent gesture nav bar from hiding bottom content */
+/* Use max() so there is always at least 36px clearance even when
+   env(safe-area-inset-bottom) returns 0 on older Android WebView builds. */
+#tab-stream,
+#tab-audio {
+  padding-bottom: max(36px, env(safe-area-inset-bottom, 36px));
+}
+/* The grow middle (idle/visualizer) MUST be allowed to shrink. A flex item's default
+   min-height:auto pins it to content height, so when the Saved Recordings / Clips /
+   ZK-session panels (flex-shrink-0) appear, #tab-audio overflows its h-100. On mobile the
+   controls bar is order:10 (moved to the bottom for one-handed reach), so that overflow
+   pushes the controls out and the recordings panel renders in front of them. min-height:0
+   lets the column fit so the bottom controls stay put. */
+#audio-idle-state,
+#audio-active-state {
+  min-height: 0;
+}
+#tab-photos,
+#tab-screenshots,
+#tab-network,
+#tab-files,
+#tab-calls,
+#tab-sms,
+#tab-apps,
+#tab-battery,
+#tab-notifications,
+#tab-contacts,
+#tab-browser,
+#tab-timeline,
+#tab-schedules {
+  padding-bottom: max(36px, env(safe-area-inset-bottom, 36px));
+}
+#tab-ashell,
+#tab-logcat {
+  padding-bottom: max(36px, env(safe-area-inset-bottom, 36px));
+}
+
+/* ── Tablet layout (e.g. Pixel Tablet ~1280px) ── */
+/* Navbar overflows on tablets — too many admin buttons for the width.
+   Compact the gaps, hide logout text, allow horizontal scroll. */
+@media (max-width: 1300px) {
+  .navbar .d-flex { gap: 0.4rem !important; }
+  .navbar .btn { padding: 0.2rem 0.4rem !important; font-size: 1.05rem !important; }
+  .navbar .badge { display: none !important; }           /* hide nav badges (enrollment, support, etc.) */
+  #business-account-navbar-badge { font-size: .7rem !important; padding: 2px 6px !important; }
+  .btn-logout-text { display: none !important; }          /* icon-only logout */
+}
+
+/* ── Mobile layout ── */
+@media (max-width: 960px) {
+  /* Sidebar becomes a slide-in drawer on mobile, toggled by the navbar button.
+     (Overview cards remain the primary navigation; the drawer is opt-in.) */
+  .sidebar {
+    display: block !important;
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: 286px; min-width: 286px; max-width: 86vw;
+    z-index: 1090; transform: translateX(-100%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+  }
+  .sidebar.sidebar-mobile-open { transform: translateX(0); box-shadow: 6px 0 34px rgba(0,0,0,.6); }
+  .sidebar-inner { border-right: none; }
+  .sidebar-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1085;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .sidebar-backdrop.show { opacity: 1; pointer-events: auto; }
+  /* Show the navbar drawer toggle only on mobile */
+  .sidebar-toggle-btn { display: inline-flex !important; align-items: center; }
+  /* Hide username text in navbar — keep icon buttons */
+  #nav-username { display: none !important; }
+  /* Navbar: force a SINGLE row that scrolls horizontally on overflow.
+     app.js's mobile-layout fix measures the navbar height ONCE at DOMContentLoaded
+     and pins #mobile-content directly below it. If the bar later WRAPS taller (admin
+     buttons un-hide after socket auth) the content covers the new row — that is the
+     clip. Keeping it to one row makes navH stable; children keep their natural size
+     (no squish) and overflow scrolls horizontally so every button stays reachable.
+     Parents have few buttons → no overflow → they stay right-aligned via the
+     navbar's default space-between; admins get a scrollable strip. */
+  .navbar { flex-wrap: nowrap !important; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .navbar::-webkit-scrollbar { display: none; }
+  .navbar > * { flex-shrink: 0; }
+  /* Tabs: single scrollable row, no wrapping */
+  #det-tabs { flex-wrap: nowrap !important; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #det-tabs .nav-link { white-space: nowrap; padding: .4rem .6rem; font-size: .85rem; }
+  #det-tabs::-webkit-scrollbar { display: none; }
+  /* Logout button: icon only on mobile */
+  .btn-logout-text { display: none; }
+  /* Overview cards: full-width on mobile */
+  #overview-grid > div { width: 100% !important; max-width: 100% !important; }
+  /* Action bars: move to bottom of flex-column tabs for one-handed reach */
+  .mob-action-bar {
+    order: 10;
+    border-top: 1px solid rgba(255,255,255,.08) !important;
+    border-bottom: none !important;
+  }
+  /* Device header: wrap badges to second row so name gets full width */
+  #det-header { flex-wrap: wrap; row-gap: 6px; }
+  #det-header > span { order: 1; }        /* push all badge spans to row 2 */
+  #det-header > button,
+  #det-header > div  { order: 0; }        /* back btn + name div stay in row 1 */
+}
+
+/* ── Input injection ripple ── */
+@keyframes injectRipple {
+  0%   { width:0;    height:0;   opacity:1; }
+  100% { width:60px; height:60px; opacity:0; }
+}
+.pointer-events-none { pointer-events: none !important; }
+
+/* Shrink touch view on short screens so inject bar stays visible */
+@media (max-height: 700px) {
+  #screen-touch-view { max-height: 32vh !important; }
+  #screen-touch-img  { max-height: 32vh !important; }
+}
+
+/* ── Touch view fullscreen popup ── */
+#screen-touch-wrap.touch-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1055;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+}
+#screen-touch-wrap.touch-fullscreen #screen-touch-view {
+  max-height: none !important;
+  flex: 1;
+  overflow: hidden;
+}
+#screen-touch-wrap.touch-fullscreen #screen-touch-img {
+  max-height: 100% !important;
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+/* ── Tab navigation ──
+   The bottom "All Tabs" drawer (#mob-tab-bar → openTabSheet) is ALREADY visible at every width
+   (its `d-flex` class beats any display rule), so it's the single tab nav. We just hide the
+   horizontal #det-tabs bar everywhere — it stays in the DOM (display:none) so the active-tab
+   state the JS reads from `#det-tabs .nav-link.active` keeps working; only its rendering goes. */
+#det-tabs { display: none !important; }
+@media (max-width: 960px) {
+  /* Keep pushing the bar above the Android gesture nav / iOS home indicator on mobile. */
+  #mob-tab-bar { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+/* ── Tab sheet ── */
+.tab-sheet-group-label {
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--sentinel-modal-text);
+  opacity: .5;
+  margin: 14px 2px 6px;
+}
+.tab-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.tab-sheet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 4px;
+  background: var(--sentinel-solid-panel-bg);
+  border: 1px solid var(--sentinel-hairline);
+  border-radius: 10px;
+  color: var(--sentinel-modal-text);
+  opacity: .85;
+  font-size: .68rem;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, transform .1s;
+  min-height: 58px;
+  line-height: 1.2;
+  text-align: center;
+}
+.tab-sheet-item i { font-size: 1.3rem; }
+.tab-sheet-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-sheet-item:hover  { background: rgba(13,110,253,.15); border-color: rgba(13,110,253,.4); color: var(--sentinel-modal-text); opacity: 1; }
+.tab-sheet-item:active { transform: scale(0.93); }
+.tab-sheet-item.tab-active {
+  background: rgba(13,110,253,.25);
+  border-color: #0d6efd;
+  color: #6ea8fe;
+  opacity: 1;
+}
+/* NOTE: no CSS animation on #tab-sheet — entrance/close animations are driven by
+   inline transitions in app.js (openTabSheet/_animateTabSheetClose). A keyframe
+   animation here with fill-mode:forwards permanently overrides inline transforms,
+   which silently killed the swipe-drag follow and the animated close. */
+
+/* ── Google Maps InfoWindow — dark theme override ── */
+/* Outer container & scrollable wrapper — rgba so injected styles can control opacity */
+.gm-style .gm-style-iw-c,
+.gm-style .gm-style-iw-d {
+  background: rgba(13,13,22,0.80) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.6) !important;
+  border-radius: 8px !important;
+  color: #e4e4f0 !important;
+  padding: 0 !important;
+}
+/* Close button */
+.gm-style .gm-style-iw-tc::after,
+.gm-style .gm-style-iw-t::after { background: rgba(13,13,22,0.80) !important; }
+button.gm-ui-hover-effect { filter: invert(1) !important; }
+/* Scrollbar area */
+.gm-style .gm-style-iw-d::-webkit-scrollbar { display: none; }
+
+/* ── Mobile content area: all styles set by JS inline ── */
+/* No CSS rules here — any stylesheet rule can be overridden by specificity;
+   JS uses cssText to set all properties atomically. */
+
+/* Global map device name labels — dark outline for readability on any map style */
+.gm-device-label {
+  text-shadow:
+    -1px -1px 0 rgba(0,0,0,0.85),
+     1px -1px 0 rgba(0,0,0,0.85),
+    -1px  1px 0 rgba(0,0,0,0.85),
+     1px  1px 0 rgba(0,0,0,0.85),
+     0    2px 4px rgba(0,0,0,0.7);
+}
+
+/* ── Debug Log Panel ──────────────────────────────────────────────────────── */
+.debug-filter-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.45);
+  border-radius: 4px;
+  transition: background .15s, color .15s;
+}
+.debug-filter-btn:hover { background: rgba(255,255,255,.07); color: rgba(255,255,255,.75); }
+.debug-filter-btn.active { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.28); }
+.debug-log-row { border-bottom: 1px solid rgba(255,255,255,.04); padding: 2px 6px; word-break: break-word; }
+.debug-log-row.level-error  { background: rgba(248,113,113,.06); }
+.debug-log-row.level-warn   { background: rgba(251,191,36,.04); }
+.debug-log-row[hidden]      { display: none !important; }
+
+/* ── Apps tab — pause/unpause redesign ─────────────────────────────────────── */
+.apps-section-label {
+  font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255,255,255,.42); margin: .35rem .25rem .3rem;
+}
+.app-row { transition: background .12s; }
+.app-row:hover { background: rgba(255,255,255,.03); }
+.app-row-paused { background: rgba(248,83,107,.07); }
+.app-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  object-fit: cover; background: #1e1e2e;
+}
+.app-letter {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1.15rem; color: #fff;
+}
+.app-paused-pill {
+  background: #f8536b; color: #fff; font-weight: 800; font-size: .62rem;
+  letter-spacing: .06em; padding: .18rem .5rem; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: .25rem; line-height: 1;
+  animation: appPausePulse 2s infinite;
+}
+@keyframes appPausePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(248,83,107,.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(248,83,107,0); }
+  100% { box-shadow: 0 0 0 0 rgba(248,83,107,0); }
+}
+.app-sched-chip {
+  color: #8ec5ff; font-size: .66rem; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: .25rem;
+}
+
+/* Flashing Support button when a new Conversation / Live Chat message arrives */
+@keyframes chatAlertFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,53,69,0);    background-color: transparent; }
+  50%      { box-shadow: 0 0 0 5px rgba(220,53,69,.85); background-color: rgba(220,53,69,.30); }
+}
+.chat-alert-flash {
+  animation: chatAlertFlash 1s ease-in-out infinite;
+  border-color: #dc3545 !important;
+}
+
+/* ── Landscape fullscreen: hide chrome, expand content ─────────────────────── */
+@media (orientation: landscape) and (max-height: 600px) {
+  nav.navbar { display: none !important; }
+  #body-row > .sidebar { display: none !important; }
+  #det-header { display: none !important; }
+  #body-row { height: 100vh; min-height: 100vh; }
+  #body-row > div:not(.sidebar) { min-height: 100vh; }
+  #map { min-height: 100vh !important; }
+}

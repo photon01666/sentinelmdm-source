@@ -1,0 +1,789 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 2026-08-06: renamed the RUNNING PROCESS only (AssemblyName -> compiled exe name), per
+         explicit user request — everything else (namespace, ProgramData folder, scheduled task
+         names, window/tray text) deliberately stays "SentinelRemoteAssist". Every hardcoded
+         "SentinelRemoteAssist.exe" filename reference across this codebase (WatchdogRunner's
+         process match, EdrWatcher/NukeRunner's own-tooling exclusion lists, AutoStartManager,
+         SilentInstaller, bastion-web.py's embedded PowerShell) was updated in the same change —
+         see git history. -->
+    <AssemblyName>Sentinel</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="Exists('app.ico')">app.ico</ApplicationIcon>
+
+    <!-- Single source of truth for the agent version — drives AssemblyVersion/FileVersion/
+         InformationalVersion (SDK default derivation), which Config.AgentVersion reads back via
+         FileVersionInfo at runtime, and which the bastion WebUI reads remotely over Hop-2
+         (`(Get-Item ...).VersionInfo.FileVersion`) to show what build is actually running on a
+         customer's box. Bump on any meaningful client behavior change (mirrors the Android APK's
+         versionName bump convention in this repo). 1.1.0 = first tracked version + RestartOnFailure
+         task setting; 1.1.1 = watchdog self-heal when AutoConnect=1 (RestartOnFailure alone does
+         not re-kick a Start-ScheduledTask-started tunnel after force-kill — proved 2026-07-11);
+         1.1.2 = version bump only, validated the fully-remote update pipeline against the fixed
+         create_session() (never kills a connected session on remint) — remint-while-connected
+         confirmed safe, but remote-update-session.sh itself had two bugs found in that same run
+         (WRITER's $ErrorActionPreference='Stop' turned schtasks' harmless "task doesn't exist yet"
+         stderr into a terminating error; a nested f-string in the final version-check broke Python
+         parsing) — both fixed. 1.1.3 = version bump only, validates the corrected script end-to-end
+         with remint included (not the no-remint path). 1.2.0 = Endpoint Application Control (WDAC
+         default-deny) support: a new appcontrol-watch mode (AppControlWatcher.cs) tails
+         Microsoft-Windows-CodeIntegrity/Operational and reports blocked/audit events to the
+         bastion; TunnelRunner.cs gains a conditional local forward (endpoint-config.json-gated) so
+         the watcher can reach the bastion's WebUI API over the existing tunnel. 1.2.1 = fix
+         AppControlWatcher reporting the raw NT device path (\Device\HarddiskVolumeN\...) instead
+         of a drive-letter path — broke Approve's Test-Path file-identity check (found live M5:
+         "file no longer present" even though the file was right there). Now resolved via
+         QueryDosDevice before the report is sent. 1.3.1 = two unattended-mode fixes found live
+         2026-07-15: (a) UAC popped on EVERY dashboard session start until a reboot — the
+         interactive UI process holds the control channel before a reboot, so it (not the SYSTEM
+         process) handled each remote_assist_ssh_key push, and RunElevatedSetup() gated its no-UAC
+         scheduled-task path on IsUnattendedProcess alone → always `runas`. Now routes through the
+         registered SYSTEM AutoSetup task whenever it exists, from either process; also hoisted the
+         ExtraPubKeyPath persist so the interactive `runas` path actually installs the freshly
+         pushed Hop-2 key. (b) "Start automatically" stopped working after a reboot — the
+         unattended-tunnel process's finally called ClearEnrolled(), deleting the persistent
+         enrollment marker that the next boot's AtStartup tunnel needs; removed. 1.3.2 = fixes the
+         REAL cause of 1.3.1's two symptoms, found live 2026-07-15 on the QEMU VM: in autostart mode
+         the interactive UI window took the single control-channel mutex and won, but then deferred
+         Hop-1 to the SYSTEM background service, which was blocked forever waiting on that same mutex
+         — so dashboard sessions stayed "Orphan" (never connected) AND every session start re-popped
+         UAC (the non-elevated UI handled the key install via runas; the scheduled-task workaround
+         it fell back to never actually executes when triggered on demand). Fix: (a) MainForm — in
+         autostart mode the interactive UI is status-only, it hands the control channel to the
+         SYSTEM service (ReleaseControlChannelInteractive) instead of holding it; (b) SetupRunner —
+         the SYSTEM service runs setup in-process (already elevated, live pushed key, no UAC, no
+         flaky task) instead of the scheduled-task hop. 1.3.5 = control-channel watchdog: found
+         live 2026-07-17 on the QEMU VM that a reconnect rejected server-side ("Socket error:
+         Invalid signature" — plausibly transient clock skew on a heavily-loaded host) left the
+         control channel permanently disconnected with xray/REALITY itself still healthy, so the
+         existing CheckXrayHealth() 30s timer (which only ever inspected xray transport health,
+         never the Socket.IO connection itself) never noticed — only a full process kill/restart
+         recovered it. Same timer now also force-reconnects if the control channel is still down
+         ControlChannelStuckThreshold (45s) after the last Connect() attempt, independent of xray's
+         own state; also started from Connect() itself (not only inside OnConnected) so it runs
+         even if a connection attempt never succeeds at all. Also grows the account-login dialog's
+         "Two-factor code" label/row further (22px->26px label, 60px->64px row) and the error row
+         (24px->28px) — reported still clipped even after the prior 18px->22px fix for the same
+         label; not visually re-verified against a live Windows runtime this round. 1.3.6 = per-
+         device Hop-1 identity (new Hop1Identity.cs): replaces the old account-linked flow's ONE
+         shared keypair per SentinelMDM account (baked in at build time, RemoteAssistHop1Key.cs,
+         now removed) with a keypair each device generates for itself on first run and reports to
+         the server on every "register" (hop1PublicKey). Found live 2026-07-18 testing two devices
+         under one account for the first time: the shared key meant sshd's authorized_keys matching
+         could only ever honor the FIRST device's line, so every OTHER device's own -R port-forward
+         was silently denied ("remote port forwarding failed" / server-side "the request was
+         denied") no matter how correctly the bastion had provisioned its own port — see docs/ARCHITECTURE.md. New AccountLinkedBuild MSBuild property/compile
+         constant replaces RemoteAssistHop1Key.IsConfigured as the "is this a real account-linked
+         build" signal now that nothing account-specific is embedded at build time. 1.4.0 = EDR
+         Phase 1 (continuous behavioral telemetry): new edr-watch mode (EdrWatcher.cs, mirrors
+         AppControlWatcher.cs's shape) tails Microsoft-Windows-Sysmon/Operational (Sysmon deployed
+         by the bastion's provisioning script, same pattern as WDAC) and reports process-lineage
+         (Office/script-host spawning a shell, or any -enc/-EncodedCommand powershell invocation),
+         LSASS ProcessAccess (credential-dump indicator), and CreateRemoteThread (hollowing-adjacent,
+         report-only) rule hits to the bastion over TunnelRunner's conditional -L forward. New
+         EdrConfig.cs/Config.EdrDir; TunnelRunner.cs's -L forward selection extended from a 2-way to
+         a 3-way check (AppControl/WinUpdate/Edr all share one provisioned config/port). Report
+         payload field-name mapping cross-checked against Sysmon's documented schema but NOT yet
+         independently verified against a real live event on a real Windows box (same caveat
+         AppControlWatcher.cs's own first release carried for CodeIntegrity events) — verify on the
+         next real test run. 1.4.1 = EDR live-verified end to end 2026-07-19 (real Sysmon events,
+         correct decode, correct routing) — found and fixed two real bugs from that live run: (a)
+         EdrWatcher.cs now excludes SentinelRemoteAssist's own tooling (sshd-session.exe/sshd.exe/
+         ssh-agent.exe/SentinelRemoteAssist.exe/xray.exe under the SentinelRemoteAssist install path)
+         as a source/parent image, since every existing bastion-driven PowerShell action (Telemetry,
+         WinUpdate, AppLocker, ARP scan, IT audit, EDR's own provisioning) is spawned as a child of
+         our own sshd and the -EncodedCommand ones would otherwise ALWAYS match the lineage rule; (b)
+         bastion-side enable_edr() now force-reconnects the Hop-1 tunnel immediately after a
+         successful enable, since TunnelRunner.cs's -L forward is only decided at connection-BUILD
+         time — an already-running tunnel never picks up a newly-written endpoint-config.json on its
+         own, so EdrWatcher ran and queued real events to its local outbox but nothing reached
+         bastion until the tunnel happened to reconnect. 1.5.0 = EDR Phase 2 (Active Remediation):
+         local Kill/Suspend/Resume primitives (Win32Native.cs — thread suspend/resume has no
+         managed .NET wrapper — + ProcessIntervention.cs) for the future autonomous-response path;
+         a new LocalIsolation.cs shells netsh.exe directly to isolate/restore this host's network
+         with zero Hop-2 dependency (writes the same isolation-block.json marker the bastion-side
+         dashboard-triggered PS1 pair reads/writes, so status is consistent regardless of which
+         path triggered it) — not yet called from anywhere; Phase 3's canary-file/mass-encryption
+         detectors are the actual callers. Dashboard-triggered process list/kill, finding-scoped
+         file delete, and host isolation block/unblock all landed bastion-side (new PS1 scripts,
+         no agent-side change needed for those — they run over the existing arbitrary-Hop-2-script
+         primitive, same as every other one-shot dashboard feature). 1.6.0 = EDR Phase 3
+         (anti-ransomware + canary files): new RansomwareGuard.cs, started from EdrWatcher.Run()
+         alongside the Sysmon watcher (same process/config, not a separate mode). Provisions 3 to 5
+         realistically-named decoy files (never overwriting a real file — hard collision check
+         first) into each C:\Users\* profile's Documents/Desktop/Pictures/Downloads, watched via
+         FileSystemWatcher; ANY touch (change/rename/delete) is autonomous and instant, no toggle —
+         kill the attributed process tree (attribution via a new Sysmon Event 11 FileCreate
+         correlation buffer in EdrWatcher.cs, TryGetRecentFileTouch) plus local network isolation
+         (LocalIsolation.cs from 1.5.0) plus an on-screen notification to the interactive session
+         (new SecurityNotification.cs, WTSSendMessage over new Win32Native.cs P/Invokes, since
+         edr-watch runs as a SYSTEM/Session-0 task with no desktop of its own to pop a MessageBox
+         into). Also a weighted sliding-window mass-file-modification rate heuristic across all
+         watched roots (renames with an extension change weighted highest — the classic encryptor
+         rename-over-original fingerprint) with an allowlist for known-legitimate bulk-file
+         processes (OneDrive/Dropbox/Search Indexer/Defender/backup) — deliberately report-only
+         until thresholds are tuned against a real controlled test, per the earlier decision not to
+         repeat the Telemetry-v1 ship-untested mistake. A 60s backstop re-checks canary
+         existence/content hash in case FileSystemWatcher drops an event during the exact burst
+         that matters most. Both new rule types (canary_file_touch, mass_file_modification) added to
+         bastion-web.py's ingest_edr_report() rule allow-list — NOT yet independently verified
+         against a real controlled-detonation run on a Windows box; verify on the next test pass
+         before trusting the autonomous kill path in the field. Live-verified 2026-07-19 on the
+         canary path specifically (touch -> instant isolate, kill correctly skipped when no
+         process was attributed) — mass-modification heuristic still unverified. 1.7.0 = EDR
+         Phase 4 (forensic depth): (a) lineage/network context — a new BuildLineageContext()/
+         BuildLineageContextByPid() in EdrWatcher.cs surfaces the Phase-1 per-ProcessGuid
+         correlation buffer (parent chain + observed network connections) as a `lineage_context`
+         field riding along on lsass_access, create_remote_thread, canary_file_touch, and
+         mass_file_modification reports — previously that buffer only ever fed the process_lineage
+         rule's own report. RecentFileTouches (Phase 3's file-touch attribution buffer) now also
+         carries the touching process's ProcessGuid, not just Image/Pid, via Sysmon Event 11's own
+         ProcessGuid field. (b) HollowingWatcher.cs — a new, independent, VirtualQueryEx-based
+         heuristic (new Win32Native.cs P/Invokes: OpenProcess/VirtualQueryEx/
+         MEMORY_BASIC_INFORMATION) checking every running process every 90s for whether its own
+         main-module base address is still MEM_IMAGE-backed (the classic unmap+rewrite/RunPE
+         hollowing technique replaces that with MEM_PRIVATE) or RWX at that base — narrowly targets
+         ONE hollowing technique, NOT process injection in general, and has NOT been validated
+         against a real hollowing PoC (only that the P/Invoke plumbing runs cleanly against
+         ordinary processes without throwing) — report-only, MEDIUM, one alert per process
+         lifetime, never autonomous, same posture as CreateRemoteThread. New rule
+         process_hollowing_indicator added to bastion-web.py's ingest_edr_report() allow-list. (c)
+         Thread-suspend/resume dashboard exposure — new _EDR_PROCESS_SUSPEND_PS1/
+         _EDR_PROCESS_RESUME_PS1 in bastion-web.py (inline C# Add-Type mirroring
+         ProcessIntervention.cs's own OpenThread/SuspendThread/ResumeThread pattern, since Windows
+         has no built-in cmdlet for this either), new Suspend/Resume buttons next to Kill in the
+         dashboard's EDR process list — freezes/unfreezes every thread of a PID as a lighter-weight
+         alternative to Kill. USN Journal (evaluated as the plan's own explicit event-drop
+         contingency, not implemented) — no field evidence yet of FileSystemWatcher dropping
+         events in practice, so deferred until real Phase 3 usage shows it's actually needed.
+         Live-verified 2026-07-19 against a real deployed 1.7.0.0: found and fixed a real bug
+         where Kill/Suspend/Resume's PS1 param name $Pid collided with PowerShell's read-only
+         automatic $PID variable (bastion-web.py only, no agent-side change — see that repo's own
+         history). 1.7.1 = RansomwareGuard.cs's autonomous-action storm-guard cap raised 5 -> 500
+         per 2-minute window, explicit user call ("make it high enough it won't miss killing
+         anything") — 5 was too conservative against the realistic worst case of many canaries
+         (up to 5 names x 4 folders x N real user profiles) being hit close together during a fast,
+         non-selective ransomware sweep; 500 comfortably exceeds any plausible on-box canary count
+         while still bounding a genuinely pathological infinite-loop bug from hammering
+         taskkill/netsh forever. No other behavior change. 1.8.0 = S3 Bucket Network Drive
+         (S3DriveManager.cs): mounts two S3 prefixes as real local folders (Private + Public),
+         each `subst`-mapped to its own drive letter (prefers Z:, falls back to the next free
+         letter independently per share), kept in sync via `rclone bisync` on a 3-minute timer.
+         Encrypted with rclone's `crypt` remote, connection-string-chained over an on-the-fly S3
+         remote (no rclone.conf ever written to disk). Public share password is account-wide
+         (every device the account controls shares one password + the same `public/` prefix so
+         they can collaborate); Private share password is set per-device on that device's own
+         WebUI page and never shared. Config/secrets arrive over the existing RA Socket.IO control
+         channel (`set_s3_drive` command, mirrors set_vpn) — rclone then talks to S3 directly from
+         this box, never routed through the bastion or server. Drive-letter visibility across the
+         SYSTEM-vs-interactive execution split is handled via a per-interactive-user AtLogOn
+         scheduled task (discovering the logged-in username via Win32_ComputerSystem.UserName,
+         same SYSTEM->interactive-session bridging technique as the screenshot-over-SSH procedure
+         documented in docs/ARCHITECTURE.md). Config persisted DPAPI-protected (LocalMachine scope, same
+         treatment as DeviceIdentity.cs's own key store) rather than VpnManager's plaintext-JSON
+         precedent, since this file holds a real S3 secret key + obscured share passwords. 1.8.1 =
+         three fixes found live 2026-07-20 on the first real Windows box test: (a) BuildCryptRemote
+         was trimming the trailing slash off the bucket prefix — S3 has no real directories, so a
+         brand-new/never-synced prefix with zero objects under it can't be told apart from "doesn't
+         exist" without one, and rclone bisync's both-sides-same-type precondition check failed with
+         "Source doesn't exist or is a directory and destination is a file" on every first sync
+         attempt; now always appends exactly one trailing slash. (b) subst'd drives showed as
+         "Local Disk" in Explorer with no way to tell Private from Public — added a
+         DriveIcons\<Letter>\DefaultLabel registry write (SetDriveLabel) alongside every subst call,
+         both the immediate current-session one and the persisted per-user logon script. (c) Stop()
+         only disposed the sync timer — disabling the feature via the WebUI toggle left both drive
+         letters mounted in Explorer AND the per-user logon task still registered (which would have
+         re-mounted them again at the next logon); Stop() now also unsubst's both letters, clears
+         their drive-label registry keys, and unregisters the logon task. 1.8.2 = the 1.8.1
+         trailing-slash fix wasn't enough on its own — the REAL S3-compatible endpoint URL (which
+         contains "://") broke rclone's connection-string grammar even when embedded/quoted inside
+         the nested s3 spec, failing with "Custom endpoint `https` was not a valid URI" (truncated
+         at the first colon). Confirmed live via a local rclone repro against the real R2 endpoint:
+         moved endpoint/access_key_id/secret_access_key/region OUT of the connection string
+         entirely and into RCLONE_S3_* environment variables on the rclone process instead (env
+         vars have no delimiter grammar, so this class of bug can't recur) — the same repro then
+         reached a real HTTP round-trip to R2. Connection string is now just
+         `:crypt,remote=":s3:<bucket>/<prefix>/",password=<obscured>:`, nothing else nested. -->
+    <!-- 1.8.3 = the per-user logon subst task visibly flashed a PowerShell console for 3-4s at
+         every reboot/logon despite `-WindowStyle Hidden` — found live 2026-07-20, a known Windows
+         11 regression where Windows Terminal (the default console host) doesn't reliably honor
+         PowerShell's own -WindowStyle flag the way legacy conhost.exe did. Fixed by launching
+         through a tiny VBScript wrapper (WScript.Shell.Run(cmd, 0, True)) instead of invoking
+         powershell.exe directly from the scheduled task — wscript.exe has no console window at
+         all, and its Run() window-style argument is a completely different, far more reliably
+         honored code path. -->
+    <!-- 1.8.4 = fixed a live EDR false-positive spam bug found 2026-07-20 on the two dev-owned
+         test VMs: EdrWatcher.cs's IsOwnTooling() only recognized our own tooling as the DIRECT
+         parent image. On a VM where OpenSSH's default exec shell is PowerShell, every legitimate
+         Hop-2 call (BitLocker's 15-min status poller, AppLocker, session_powershell, etc.) spawns
+         one extra hop deeper: sshd-session.exe -> powershell.exe -c "powershell ...
+         -EncodedCommand ...". IsOwnTooling never saw through that wrapper, so every single
+         legitimate call paged as a process_lineage/encoded-powershell-command finding, unbounded,
+         forever (confirmed live: 15-min-interval pages for 6+ hours straight). Added
+         IsOwnToolingLineage(), which walks up one more level through the existing in-memory
+         lineage buffer (ProcessCache) only when the direct image is a generic PowerShell host — a
+         real attacker's PowerShell process spawned by a non-own-tooling parent still alerts
+         normally. Applied to all three rule call sites (process_lineage, create_remote_thread,
+         lsass_access) for consistency. A second, independent bug in the same investigation (the
+         bastion's signal_send() on every high-severity report had NO suppression at all,
+         completely bypassing server.js's 30-min EDR_ALERT_SUPPRESS_MS window, which only guards a
+         separate alert path) was fixed bastion-side in bastion-web.py — no agent change needed
+         for that half. -->
+    <!-- 1.8.5 = fixed a live remote-update-safety bug found 2026-07-20 while rolling out 1.8.4 to
+         a dev-owned account-linked test VM: Program.cs's unattended-tunnel branch checked
+         SessionEmbedded.IsConfigured (compile-time config baked into a specific exe by the
+         bastion's per-session ad-hoc builder) BEFORE AccountLinkedSession.IsPreviouslyEnrolled (a
+         disk-persisted, exe-independent fact about the device). remote-update-session.sh's remint
+         step always rebuilds through the per-session ad-hoc builder, so reminting an
+         already-account-linked device produced an exe that silently downgraded it to
+         RunUnattendedAdHocTunnel() (Hop-1 admin tunnel only) on every future unattended-tunnel
+         launch — the dashboard/device_status control channel died with no way back short of
+         reinstalling the true account-linked build, and Hop-1 stayed healthy throughout so it was
+         invisible from the admin side (confirmed live: bastion showed connected+correct version,
+         SentinelMDM dashboard showed the device Offline on stale pre-restart data indefinitely).
+         Swapped the check order — IsPreviouslyEnrolled now wins, matching MainForm.cs's own
+         (already-correct) prioritization at its equivalent gate. Safe: RunUnattendedAccountLinkedSocket()
+         already starts Hop-1 on demand via AccountLinkedSession.SessionRequested, a strict
+         superset of the ad hoc path. -->
+    <!-- 1.8.6 = MainForm's "Start automatically after reboot" checkbox replaced with a button
+         next to CONNECT, labeled "Install the EDR" / "Disable the EDR" depending on current
+         state (UpdateAutoStartButtonText) — same underlying action as before
+         (AutoStartManager.SetEnabled), just presented as a button instead of a checkbox below
+         CONNECT, per user request. Also replaced the technician-PIN gate
+         (Config.AutoStartEnablePin, removed) with a typed-confirmation dialog requiring the
+         operator to type the word YES (ConfirmAutoStartYes, was PromptAutoStartPin) — still only
+         required when enabling, never when disabling. Explainer text at the top of the window
+         now describes what both buttons do. -->
+    <!-- 1.8.7 = fixed a real layout bug in 1.8.6 found live via user screenshot: the window's
+         ClientSize was left at the old fixed 820x640 while the explainer text grew to describe
+         both CONNECT and "Install the EDR" — the longer AutoSize label row squeezed the button
+         row off the bottom of the fixed-size window entirely (screenshot showed only the
+         scrolled explainer text, no buttons at all). Bumped ClientSize/MinimumSize height
+         (640->720, 560->640) and trimmed the explainer text to 7 lines instead of 9. Visually
+         verified via a real screenshot on a live account-linked test VM before shipping this
+         time (not just reasoned about pixel math) — see docs/ARCHITECTURE.md notes / this changelog for the lesson:
+         WinForms sizing changes need an actual screenshot, reasoning about control heights alone
+         is not enough (repeat of the OTP-dialog-sizing lesson from an earlier session). -->
+    <!-- 1.8.8 = Milestone 3 of the AI Live Chat tray feature (admin opt-in per device, off by
+         default): AccountLinkedSession.AiChatEnabled + RemoteAssistSocket's new "set_ai_chat"
+         command handler (mirrors set_vpn/set_s3_drive) + a stub "Live Chat" tray menu item whose
+         visibility follows that flag live, independent of the tray icon's own attended/unattended
+         visibility. No real chat window yet (Milestone 4+) — this milestone only proves the
+         opt-in-flag -> command-channel -> tray-visibility plumbing end to end. -->
+    <!-- 1.8.9 = Milestone 4 of the AI Live Chat tray feature: the real AiChatForm chat window
+         (dark-chrome transcript + input, singleton per MainForm), wired end to end over the
+         existing control socket — new ai_chat_message/ai_chat_tool_proposal/ai_chat_tool_result
+         RemoteAssistSocket events + SendChatMessage()/SendToolDecision(). Tool-proposal cards
+         (script/action shown verbatim + Run/Deny) are already rendered and wired to
+         SendToolDecision — server-side EXECUTION of an approved proposal (actually calling
+         PowerShell/AppLocker) lands in Milestone 5, this milestone is the client UI + plain-text
+         chat loop. -->
+    <!-- 1.8.10 = tray UX pass for AI Live Chat: removed "Exit (removes remote-support access)" from
+         the tray menu (the tray's job now is opening Live Chat, not self-service removal); clicking
+         the tray icon itself (single left-click or double-click) now opens Live Chat directly when
+         it's enabled for this device, falling back to the old "show the Connect/EDR window"
+         behavior when it isn't. Tray icon visibility simplified to ONE rule in ANY mode (attended
+         or autostart/"Install the EDR"): no icon at all unless AI Live Chat is enabled for this
+         device — dropped the old "always show in attended mode regardless of chat" carve-out. Also
+         carries a fix for a real bug in a same-day server.js edit (unrelated to this client): a
+         variable rename in the register handler left a stale reference to the old name, throwing on
+         every device registration fleet-wide (server-side only, no client change needed for that
+         fix). -->
+    <!-- 1.8.11 = new SentinelRemoteAssist-AutoSetup_TrayLaunch scheduled task (sentinel-setup.ps1),
+         registered/unregistered alongside the existing AutoSetup/AutoSetup_Tunnel tasks whenever
+         "Install the EDR" is turned on/off. AtLogOn trigger, BUILTIN\Users group principal
+         (Interactive logon, resolves to whichever user is currently logged on — we don't know the
+         customer's account name ahead of time), running the plain exe with the autostart flag.
+         Closes the gap found live: after "Install the EDR" is on, NOTHING previously launched an
+         interactive MainForm/tray process at all (only the headless edr-watch/unattended-tunnel
+         background tasks run on their own), so the AI Live Chat tray icon never appeared without
+         someone manually
+         launching the exe. Safe alongside the unattended tunnel: MainForm's own Load handler
+         already treats itself as status-only (no competing RemoteAssistSocket) whenever
+         AutoStartManager.IsEnabled && IsPreviouslyEnrolled — confirmed by code read, not yet by a
+         live multi-reboot test. -->
+    <!-- 1.8.12 = AI Live Chat is now fully autonomous (locked design change, reversing the earlier
+         confirm-before-run decision): tool-action cards no longer have Run/Deny buttons — the
+         server already executed the action by the time the card renders; the card is now a live
+         "Running…"/"Done." progress readout only. Removed the now-dead SendToolDecision()/
+         ai_chat_tool_decision plumbing. Also moved the "Thinking…"/"Working…" status label to
+         ABOVE the input box instead of below it (was easy to miss below the Send button). -->
+    <!-- 1.8.13 = tray tooltip text for the unattended/"Install the EDR" connected state changed
+         from "Sentinel Remote Assist — Connected (Background)" to "Sentinel Protection - Enabled"
+         (all 4 call sites in MainForm.cs) — plainer, customer-facing wording. -->
+    <!-- 1.8.14 = two RansomwareGuard/EDR fixes found live restoring a File Backup straight to
+         Desktop (new destination-picker feature): (1) the mass-file-modification heuristic was
+         false-firing on the restore's own legitimate scp burst — now skips rate-weighting for any
+         path under a "Restored-<epoch>" folder (the exact naming bastion-web.py's
+         restore_file_backup() gives a custom-destination restore). (2) SecurityNotification's
+         WTSSendMessage call passed character counts where the API wants BYTE counts, silently
+         truncating every EDR alert's title/body to roughly its first half ("Sentinel Security
+         Alert" rendered as "Sentinel Se") — fixed to pass (Length+1)*2. -->
+    <!-- 1.8.15 = EdrWatcher's local outbox (queued reports the bastion hasn't ACKed yet) had no
+         cap at all. Found live 2026-07-22: a report_token mismatch between bastion state and this
+         box's endpoint-config.json (likely a VM snapshot revert after a later re-provision) sent
+         every report POST into a permanent 403 loop for 2+ days, silently growing the outbox to
+         several hundred files with nobody ever seeing an alert. QueueToOutbox now prunes oldest-
+         first (by the existing yyyyMMddHHmmssfff filename prefix, already chronological) before
+         every enqueue: hard cap 2000 files, 14-day max age. Does not fix a stuck token itself —
+         that still needs a fresh Enable EDR click to re-provision matching tokens on both sides. -->
+    <!-- 1.8.16 = SetupRunner's OpenSSH-Win64 re-extraction check only verified sshd.exe existed
+         before deciding to skip re-extracting the embedded zip. Found live 2026-07-22 on the test Windows host:
+         sftp-server.exe was missing from that folder (most likely Defender real-time protection
+         acting on it before an exclusion was ever applied) while sshd.exe survived, so the reverse
+         tunnel and plain ssh EncodedCommand execution stayed healthy, but EVERY feature that
+         deploys a script via scp (Defender Exclusion, Telemetry block, forensics collection, File
+         Backup, etc) silently failed with "scp: Connection closed", and re-running the setup flag
+         did nothing because this check never noticed anything was wrong. Now requires
+         sftp-server.exe too before skipping re-extraction, self-healing the next time setup runs
+         (e.g. via Start-ScheduledTask SentinelRemoteAssist-AutoSetup) once this build is deployed. -->
+    <!-- 1.8.17 = 1.8.16's re-extraction remedy (Directory.Delete(sshDir, true) then
+         ExtractToDirectory) turned out to be unsafe on the very device it was meant to fix:
+         the test Windows host's live Hop-2 SSH session has its own worker process (sshd-session.exe) with
+         sshd.exe's libcrypto.dll loaded, so the delete threw UnauthorizedAccessException on that
+         one in-use file and aborted before sftp-server.exe was ever restored (confirmed live via
+         setup-error.txt). Fixed manually on that device via a targeted single-file extraction from
+         the zip already staged on disk; this build makes that the normal behavior going forward:
+         extract to a temp directory, then copy each file into place individually, skipping (not
+         failing on) any destination that's currently locked or in use: a locked file is by
+         definition already present, so skipping it is always safe and never blocks restoring
+         whatever actually IS missing. -->
+    <!-- 1.8.18 = the "enable EDR/AppControl/WinUpdate" bastion-side kick that force-restarted the
+         Hop-1 tunnel (so its -L report forward would pick up fresh endpoint-config.json) worked by
+         killing the current ssh.exe via a PowerShell process match and hoping TunnelRunner's own
+         retry loop would notice the exit and reconnect. Found unreliable live 2026-07-22 on
+         the test Windows host: enabling EDR triggered the kick, but the tunnel stayed down for 2+ minutes with
+         no "Tunnel dropped - retrying..." line ever appearing in this agent's own log (the
+         externally-killed process's exit was never observed by the loop's WaitForExitAsync); only
+         a Regen Private Key cycle from the dashboard recovered it. That kick is now REMOVED
+         bastion-side. In its place: a new dedicated "restart_ra_tunnel" server-to-agent socket
+         command (RemoteAssistSocket.HandleRestartTunnel -> AccountLinkedSession.
+         TunnelRestartRequested -> a direct Stop()+Start() on the SAME TunnelRunner instance already
+         in use, in-process, no external process kill involved). Deliberately narrower than a full
+         Regen Private Key or SessionRequested replay: no new key material, and xray/the Socket.IO
+         control channel are both left untouched; only the Hop-1 ssh.exe itself is bounced. -->
+    <!-- 1.9.0 = new live screen streaming over the existing socket.io control channel (screen_frame
+         JPEG frames at configurable quality 10-100%, per-monitor selection) + full remote desktop
+         mouse/keyboard input injection (SendInput-based — mouse absolute/relative/wheel, keyboard
+         vkCode/combos/text). New ScreenStreamService.cs, InputInjectionService.cs, InputNative.cs.
+         Added System.Drawing.Common 8.0.0 NuGet dependency for GDI+ CopyFromScreen capture. -->
+    <!-- 1.9.0.1 = cutover script now restarts EdrWatch (SentinelRemoteAssist-EdrWatch) after killing
+         old processes during agent update, matching the existing AppControlWatch restart. EDR +
+         AppControlWatch scheduled tasks also gained -RepetitionInterval 15min on their AtStartup
+         triggers so an externally-killed watcher (taskkill, cutover) recovers within 15 min even
+         without a cutover-driven restart. Root cause: EDR watcher killed during cutover at 02:47
+         never restarted (boot trigger only, no repetition) — canary file deletions after that
+         point went completely undetected (no alert, no isolation, no kill). -->
+    <!-- 1.9.0.2 = two RansomwareGuard.cs bugs found live 2026-07-23 on the test Windows host while diagnosing
+         "canary watcher not detecting deletes": (1) ProvisionCanaries() only ever added a canary to
+         the in-memory CanaryPaths/CanaryHashes tracking sets on the call that WROTE the file — any
+         canary already on disk from a prior run was `continue`d past untracked. CanaryPaths/
+         CanaryHashes reset to empty on every process start but the files themselves persist, so
+         EVERY restart (crash, reboot, re-provision) silently stopped watching every pre-existing
+         canary — confirmed live: a restart on the test Windows host dropped tracked-canary count from 60 to 6
+         (only the roots missing one got (re)tracked). LooksLikeOurCanary() now disambiguates a
+         pre-existing file by content before tracking it, so a genuine real-file name collision
+         (the user's own actual "Passwords.docx") is still never touched or tracked, matching the
+         original "never overwrite a real file" doctrine. (2) No persistence across restarts meant a
+         canary deleted/modified during ANY outage window (crash, the 1.9.0.1 cutover-kill scenario,
+         a plain reboot) went completely undetected forever, with zero record anywhere. New
+         canary-state.json (path->hash) persisted on every provision/backstop/live-delete change;
+         Start() now diffs the prior run's persisted state against current reality BEFORE
+         re-provisioning silently recreates anything, and reports a retroactive
+         canary_file_touch(deleted-while-watcher-down / modified-while-watcher-down) — still
+         isolates the host (zero-tolerance posture unchanged), just can't target a kill since
+         there's no live attribution buffer from before this process existed. Also: Program.cs's
+         Main() now registers AppDomain.CurrentDomain.UnhandledException +
+         TaskScheduler.UnobservedTaskException handlers that always write to a fixed
+         C:\ProgramData\SentinelRemoteAssist\crash.log BEFORE the process dies — found live that
+         the edr-watch subcommand (RansomwareGuard included) died silently ~1-2 min after a clean start with
+         zero forensic trail anywhere: WerSvc + DiagTrack were both Stopped/Disabled on that box
+         (either this agent's own Telemetry-block kill-switch or the customer's own hardening), so
+         no Application-Error event was ever logged, and no code path in this repo had a top-level
+         handler to log anything before dying either. Root cause of THAT crash is still unconfirmed
+         (native vs managed) — this only guarantees the next occurrence is diagnosable. -->
+    <!-- 1.9.0.3 = MainForm.cs's interactive control-channel construction sites (StartControlChannelInteractive,
+         OpenLiveChat's temporary chat socket) never passed a ScreenStreamService/InputInjectionService
+         into RemoteAssistSocket — only Program.cs's the unattended-tunnel flag's path did. Both null-conditional
+         call sites (HandleStartScreenStream's `if (_screenStream is null) return;`, every
+         `_inputService?.Foo()` mouse/keyboard handler) silently no-op without them, so Live Desktop did
+         nothing whenever the INTERACTIVE session happened to be the one holding the control channel. -->
+    <!-- 1.9.0.4 = the 1.9.0.3 fix wasn't the whole story: on a normal already-set-up device (autostart/
+         "Install the EDR" ON, the steady state), the control channel is held EXCLUSIVELY by the SYSTEM
+         the unattended-tunnel flag's process in Session 0 — MainForm deliberately never competes for it there
+         (see the 2026-07-15 mutex-deadlock fix). Session 0 has no real desktop: Windows fabricates a
+         synthetic "WinDisc" 1024x768 surface for it, and Graphics.CopyFromScreen against it throws "The
+         handle is invalid" every time (confirmed live 2026-07-23 on the test VM by running the identical
+         GDI call over Hop-2 from a SYSTEM PowerShell session) — silently swallowed by
+         ScreenStreamService's capture-loop catch-all, so Live Desktop looked broken even after 1.9.0.3.
+         Added InteractiveCaptureBridge.cs (CaptureBridgeHost/CaptureBridgeClient, a named-pipe IPC
+         bridge — the same class of Session-0-to-Session-1 crossing SentinelScreenSnap.exe already uses
+         for one-shot Snap screenshots): the Session-0 RemoteAssistSocket now talks to an
+         IScreenCaptureSource/IInputInjector implemented by CaptureBridgeHost, which relays start/stop/
+         mouse/keyboard commands to whichever interactive MainForm instance (Session 1, launched via the
+         AutoSetup_TrayLaunch logon task) is currently connected via CaptureBridgeClient, and relays
+         captured frames back. MainForm now starts/stops the bridge client exactly when it enters/leaves
+         "status-only" mode (Load handler's autostart-already-on branch, OnAutoStartButtonClick's
+         enable/disable transitions, FormClosed). Also: both remote-update-session.sh's and
+         bastion-web.py's self-update cutover scripts kill every SentinelRemoteAssist* process —
+         including the interactive one in Session 1 — but only ever restarted the SYSTEM/Session-0 task,
+         leaving a device with NO interactive-session agent (and therefore no bridge client, and
+         therefore no working Live Desktop) until the next reboot/logon; both scripts now also
+         re-trigger AutoSetup_TrayLaunch after cutover, mirroring the existing AppControlWatch/EdrWatch
+         restart pattern. -->
+    <!-- 1.9.0.5 = two more real bugs found live 2026-07-23 on the test VM chasing "the bridge connects
+         (confirmed via unattended-tunnel.log) and HandleStartScreenStream fires, but still zero
+         frames reach the dashboard, no error anywhere": (1) HandleGetMonitors() was the ONE code
+         path that never went through _screenStream at all — it read Screen.AllScreens directly on
+         RemoteAssistSocket's own process, which in the normal (autostart-on) case is Session 0, so
+         the dashboard's Monitor dropdown kept showing the fake "WinDisc" 1024x768 even after
+         streaming itself started working, which read as "still broken" during testing. Added
+         IScreenCaptureSource.GetMonitorsAsync() (ScreenStreamService: local Screen.AllScreens;
+         CaptureBridgeHost: round-trips a get_monitors/monitors request-response pair over the pipe
+         to the connected interactive client) and routed HandleGetMonitors() through it. (2) EVERY
+         failure path in InteractiveCaptureBridge.cs (added in 1.9.0.4) was a bare `catch { }`, and
+         the interactive (Session-1) side has no persisted log at all — MainForm.AppendLog only
+         writes to the hidden autostart window's UI textbox — so a real send/receive failure there
+         was indistinguishable from "connected fine, just no frames yet" when debugging headlessly
+         over Hop-2. Added BridgeDiag, a small self-contained file logger
+         (C:\ProgramData\SentinelRemoteAssist\capture-bridge.log) used by both CaptureBridgeHost and
+         CaptureBridgeClient at every step (connect/disconnect, command received, frame sent/relayed
+         counts, every exception) independent of StatusChanged/AppendLog; also un-silenced
+         ScreenStreamService.CaptureLoop()'s own bare `catch { }` around the actual GDI capture call
+         the same way. Root cause of the "no frames" symptom itself was NOT yet identified when this
+         version shipped — these are the diagnostics needed to find it, not a fix for it. -->
+    <!-- 1.9.0.6 = 1.9.0.5's BridgeDiag logged host+client to ONE SHARED FILE — two unrelated Win32
+         processes doing open/append/close on the same path collided (File.AppendAllText throws
+         IOException on the loser, silently swallowed by BridgeDiag's own bare catch), which likely
+         ate the exact log lines needed to see why "Client connected"/"Connected to host" logged on
+         both sides but the host's Send() reported "no client connected" ~40s later with no
+         disconnect/reconnect line from either side in between (observed live on the test VM). Split
+         into capture-bridge-host.log / capture-bridge-client.log (also stamped with pid) — no fix
+         for the underlying disconnect yet, just removing a second confound before chasing it further. -->
+    <!-- 1.9.0.7 = ROOT CAUSE (probable) of the "connects once, then silent forever" symptom, found
+         with 1.9.0.6's split logs: capture-bridge-host.log showed "Client connected" then nothing
+         until Send() found _writer null 4 minutes later, no AcceptLoop error, no re-listen; the
+         client log showed the mirror image (Connected to host, then total silence). Both
+         AcceptLoop/ConnectLoop had `catch (OperationCanceledException) { break; }` as their FIRST
+         catch, WaitForConnectionAsync/ConnectAsync(timeout,token)/ReadLineAsync(token) can all
+         surface OperationCanceledException for reasons OTHER than our own long-lived _cts being
+         cancelled (ConnectAsync's timeout param in particular races an internal timeout-based
+         token against the caller's), and that catch treated every such exception as "we're
+         shutting down": silently ending the ENTIRE listen/retry loop forever, permanently, with
+         zero log output (the catch body was empty). Changed both to only actually stop when
+         token.IsCancellationRequested is genuinely true; any other OperationCanceledException now
+         logs "spurious ... retrying" and the loop continues. Not yet re-verified live, this is
+         the fix for what the 1.9.0.6 diagnostics pointed at, next test confirms whether frames
+         actually flow. -->
+    <!-- 1.9.0.8 = 1.9.0.7's OperationCanceledException fix did NOT resolve it: retested live on
+         the test VM, "Client connected"/"Connected to host" logged once again and then total silence
+         on both sides again, with NO "spurious OperationCanceledException" line either, so that
+         was not the (or not the only) cause. Added a System.Threading.Timer heartbeat on both
+         sides (independent of the async state machine, so it keeps ticking even if the AcceptLoop/
+         ConnectLoop Task itself silently died or froze) plus per-iteration logging around every
+         ReadLineAsync call. Purely diagnostic, no behavior change, next test should finally show
+         whether the read loop task is truly wedged, silently completed, or something else. -->
+    <!-- 1.9.0.9 = LIKELY ROOT CAUSE, found from 1.9.0.8's heartbeat: the heartbeat kept ticking
+         fine (proving the process/threading itself was healthy) but writer stayed null and
+         acceptLoopStatus stayed WaitingForActivation forever after "Client connected" logged, with
+         NO "read loop iteration 1" line ever appearing on either side, meaning execution never got
+         past the handful of statements between the connect log and entering the read loop.
+         CaptureBridgeClient's StatusChanged was wired via UiInvoke (Control.Invoke — a BLOCKING
+         marshal to the UI thread) inside MainForm.StartCaptureBridgeClient(), fired moments after
+         the hidden autostart window's Load handler returns. Control.Invoke hanging silently
+         forever with zero exception is a well-known WinForms footgun; every other symptom matches
+         exactly. Removed that UiInvoke wiring entirely (BridgeDiag's file logging already covers
+         everything it would have shown, and the UI textbox is hidden/unobservable in autostart
+         mode anyway) rather than chasing exactly why Invoke specifically hangs at that moment.
+         Not fully confirmed as THE cause yet (also added try/catch + granular logging around
+         StatusChanged/writer/reader construction in 1.9.0.8 as a fallback in case this guess is
+         wrong) — next test is the real verification. -->
+    <!-- 1.9.0.10 = 1.9.0.9's UiInvoke removal did NOT fix it, retested live: both host and client
+         STILL hung at the exact same point ("StatusChanged invoked OK, about to construct
+         StreamWriter" logged, then nothing), and the client hung there too despite now having ZERO
+         StatusChanged subscribers (UiInvoke removed) — that ruled out UiInvoke definitively and
+         isolated the hang to the very next line: `new StreamWriter(pipe, Encoding.UTF8) {
+         AutoFlush = true }`. StreamWriter.AutoFlush's setter eagerly calls Flush() the instant it's
+         set; PipeStream.Flush() on a stream that's just been connected with NOTHING written to it
+         yet is a known .NET hang (both sides constructed their writer moments after
+         WaitForConnectionAsync/ConnectAsync returned, before writing anything). Removed
+         AutoFlush=true from both constructors; SendLocked/OnFrameCaptured/RespondWithMonitorsAsync
+         now call writer.Flush() manually AFTER each WriteLine instead, which only ever flushes a
+         non-empty buffer with real queued data, never an untouched one right after connect. This
+         is the strongest lead yet given it was isolated by process of elimination down to one
+         specific line, not yet re-verified live. -->
+    <!-- 1.9.0.11 = 1.9.0.10 confirmed live: Live Desktop streaming fully works end to end. Two
+         further fixes from that same test: (1) server.js's plaintext screen_frame relay drops
+         frames from any ZK-owned (public-account) device — correct for Android's covert-monitoring
+         privacy guarantee, wrong for RA's consensual Live Desktop, which shares the wire event
+         name; exempted agent_kind==='remote_assist' sockets (server-side fix, no agent change).
+         (2) "Take Control" used Pointer Lock (img.requestPointerLock()), which froze
+         MouseEvent.clientX/clientY (by design — that API is for FPS-style relative movement) and
+         captured the operator's entire local screen/keyboard until Esc, rather than just letting
+         them click the remote screen. Removed Pointer Lock entirely; added MouseMoveTo (absolute
+         cursor positioning, IInputInjector/CaptureBridgeHost/CaptureBridgeClient/
+         inject_mouse_move_to) so the remote cursor now follows the operator's real mouse 1:1 over
+         the stream image regardless of its displayed/scaled size, and all keys (including Escape)
+         are forwarded to the remote device — release now happens only via the Release Control
+         button. Also trimmed the very verbose per-frame/per-statement BridgeDiag logging added
+         while diagnosing the 1.9.0.9/1.9.0.10 hang, now that the hang itself is fixed. -->
+    <!-- 2.0.0 = EDR/ransomware-defense overhaul (audit-gap close-out, all three severity tiers;
+         full details in EdrWatcher.cs/RansomwareGuard.cs/LocalIsolation.cs and bastion-web.py's
+         EDR provisioning section). Agent: Sysmon Events 6 (driver-load), 13 (registry
+         persistence), 23 (file-delete attribution), 25 (process-tamper) now ingested and alerted
+         (driver_load/registry_persistence/process_tamper); outbound connect alerting
+         (unusual_outbound_connection, public-IP + non-standard-port, quiet-image/own-tooling
+         exclusions); shadow_copy_attack HIGH rule (vssadmin/wbadmin/diskshadow/bcdedit/wmic
+         delete-shadows lineage); sensor-health watchdog (sysmon_sensor_down/defender_disabled,
+         sc.exe query loop); multi-level own-tooling lineage walk (fixes the the test VM
+         encoded-powershell-command alert spam caused by cmd.exe as the default OpenSSH exec
+         shell breaking the old one-level walk). RansomwareGuard: drive-wide watch scope (all
+         fixed drives; non-system drive roots watched; OneDrive added) — was user-profile-folders
+         on C: only. LocalIsolation: DNS allow rules program-scoped to the OS resolver
+         (svchost.exe) instead of a bare :53 allow, closing the DNS-tunneling exfil gap.
+          Bastion (bastion-web.py): Sysmon config widened (Event 6/13/23/25 + OneDrive paths),
+          EDR provisioning gains PS Script-Block Logging + VSS shadow-protection, AppLocker now
+          ships Script + Dll collections (path-mirroring the Exe allowlist; encoded-PS flows are
+          exempt from Script rules by AppLocker's own design), isolation block PS1's DNS rules
+          lockstep with the agent's svchost scoping. -->
+    <!-- 2.0.1 = machine-wide canary tier (RansomwareGuard.cs): new machine-wide roots
+         C:\Users\Public\Documents, C:\Users\Public\Downloads, and a dedicated
+         C:\ProgramData\BackupVault subdir (created if missing; skipped if a real non-empty
+         directory collides). Canaries there are deliberately NOT hidden (unlike the profile-dir
+         ones) — nobody browses those locations on a personal PC, so visible believable decoys
+         carry no user-interaction FP risk, and the tier covers encrypt-everything ransomware
+         that hits ProgramData/Public rather than just profile documents. Watched exactly once
+         (the Public profile was already excluded from the drive scan). -->
+    <!-- 2.0.2 = canary false-positive fixes (all found live 2026-08-02 on the test VM after the
+         2.0.1 WebUI update): (1) alias/subst drive skip — GetVolumeInformation-based volume
+         serial comparison in DiscoverWatchedRoots (Win32Native.VolumeSerial); the S3 Drive
+         feature's Y:/Z: are substs of folders on C:, invisible to the SYSTEM watcher at
+         restart, and every canary on them fired deleted-while-watcher-down + autonomous
+         isolation five times in one minute. (2) DiffAgainstPersistedState skips paths whose
+         drive is not currently present (IsCanaryDrivePresent) — a missing volume is not a
+         deletion. (3) per-path 1h canary-hit cooldown (CanaryHitReportedUtc) so repeated
+         watcher restarts can't re-page/re-isolate the same canary. (4) EnsureMachineWideProgramDataRoot
+         treats a dir containing only our own canaries as ours (prior-run canaries stay tracked). -->
+    <!-- 2.0.3 = auto-provisioning installer variant (AutoProvisionBuild) + clean upgrade-over-old
+         install. New per-account exe (bastion-builder /build-installer) baking the account's
+         multi-use bind-any enrollment ticket + server URL + ToS version (AutoProvisionEmbedded.cs).
+         First run on the target PC: fetch + show the versioned ToS/MSA dialog (server /api/ra/tos,
+         acceptance recorded via /api/ra/consent + local marker) -> UAC elevated ap-install
+         (kills any running old agent processes/tasks, copies the new exe over the ProgramData
+         install even when the old binary is locked by a running SYSTEM tunnel — the old
+         EnsureInstalledCopy fallback silently kept the OLD binary in exactly that case, found in
+         review for this feature — then sets AutoConnect + re-runs SetupRunner) -> enrolls the
+         control socket with the baked ticket (no login on the target PC; server binds the device
+         to the account, pushes transport + Hop-2 key). Devices already enrolled (upgrade/reboot)
+         skip ToS + ticket and reconnect via signed auth as usual. NO UI AT ALL for this variant
+         (user decision 2026-08-03 — not even tray-only): after the ToS + cutover the process
+         enrolls headlessly (brief control-socket connection), hands the channel to the SYSTEM
+         tunnel task and exits; everything is managed from the WebUI. -->
+    <!-- 2.0.4 = version-only bump so the headless auto-provision build is identifiable. All the
+         2.0.3 auto-provision builds (interactive-window, hidden-window, and finally FULLY headless
+         per the 2026-08-03 user decision) shared the 2.0.3.0 version string, so the bastion could
+         not tell which build a box actually ran — a box on the pre-headless build still showed the
+         consent/UAC on Connect and never brought up Hop-1 (found live 2026-08-03 on the clean box:
+         'connect_to 127.0.0.1 port 43115: failed', device online but Hop-1 never bound). Any box
+         reporting 2.0.4.0 is guaranteed headless: no UI, no tray, no UAC, Hop-2 key installed via
+         the SYSTEM task, Hop-1 tunnel managed entirely from the WebUI. -->
+    <!-- 2.1.4 = Live Desktop (screen stream + mouse/keyboard remote control) removed entirely,
+         per explicit user decision — screen viewing is VNC-only now, never via this agent.
+         Deleted CaptureInterfaces.cs, ScreenStreamService.cs, InteractiveCaptureBridge.cs,
+         InputInjectionService.cs and all wiring in RemoteAssistSocket.cs/Program.cs/MainForm.cs
+         (start_screen_stream/stop_screen_stream/get_monitors/inject_mouse_*/inject_key_down/up/
+         combo command handlers, the CaptureBridgeHost/CaptureBridgeClient Session-0↔Session-1 IPC
+         bridge, and the WebUI's Live Desktop tab). -->
+    <!-- 3.0.0 = major bump for the running-process rename (AssemblyName SentinelRemoteAssist ->
+         Sentinel, i.e. the compiled exe/Task Manager process name only — namespace, ProgramData
+         install folder, scheduled task names, and window/tray text deliberately unchanged, per
+         explicit user scope). Paired with the same rename in the Linux sentineld agent. -->
+    <!-- 3.1.0 = process injection protection: ACG (block non-MS binaries), dynamic code disable
+         (W^X), font disable, image load hardening, SEHOP, binary integrity verification.
+         See ProcessGuard.cs. -->
+    <!-- 3.1.1 = EDR mass-modification guard: skip rate heuristic during shutdown
+         (GetSystemMetrics SM_SHUTTINGDOWN) + 120s post-boot grace — the 2026-08-08 phantom-reboot
+         servicing churn false alert. See RansomwareGuard.cs. -->
+    <!-- 3.1.2 = Product name renamed from "Sentinel Remote Assist" to "Sentinel" in Task Manager. -->
+    <!-- 3.1.3 = Cascade suppression: 30s per-image cooldown on agent_process_killed alerts. -->
+    <!-- 3.1.4 = Suppress false-positive agent_process_killed from watchdog-check health probes. -->
+    <!-- 3.1.5 = Add Chrome/Firefox/Edge/Discord/Slack/Teams/Tailscale/Spotify/VSCode to
+         NetworkQuietImages — all legitimately open connections on non-standard high ports as
+         part of normal operation (browser pool, chat RTC, WireGuard DERP/STUN, media stream).
+         Without this, a single Discord restart floods ~8 alerts per unique Cloudflare CDN IP,
+         and Tailscale's DERP mesh reconnects generate dozens more each reconnect cycle. -->
+    <!-- 3.2.0 = Add Phase 6 AiTM/phishing-proxy intel feed: a bounded, feed-only (LOW) report of
+         every public-IP outbound destination INCLUDING browsers + common egress ports (443 etc.)
+         that the existing "unusual_outbound_connection" MEDIUM rule deliberately never sees. The
+         server matches each destination against threat-intel sets (EvilProxy/Tycoon/VoidProxy C2 +
+         PhishTank domains/IPs/ASNs) and pages + blocks only on a match. Dedup image|destIp, 6h TTL,
+         2000-entry cap. New rule: outbound_connection. -->
+    <!-- 3.2.1 = Phase 6 domain tier: outbound_connection feed event adds destination_domain, read
+         from Sysmon Event 3 DestinationHostname (browsers populate it; raw-IP connects leave it
+         empty, and it is dropped unless it contains a dot). The server matches it against the
+         feed's c2_domains/PhishTank sets and sinks the host on a C2-tier match. -->
+    <!-- 3.2.2 = Phase 6 feed dead-code fix, found live 2026-08-14: the outbound_connection feed
+         block sat AFTER the MEDIUM path's gates, so CommonEgressPorts (443/80/8080/8443 — exactly
+         the AiTM proxy ports) and NetworkQuietImages early-returned BEFORE the feed ever ran and
+         HTTPS connects produced zero feed reports. Feed now runs first with its own gates only
+         (outbound + IsOwnToolingLineage + IsFeedEligibleIp), and IsFeedEligibleIp accepts global
+         IPv6 too (AAAA-only hosting fronts like CF Pages/Vercel/Netlify are covered via the
+         destination_domain tier). -->
+    <!-- 3.2.3 = Phase 6 DNS leg (found live 2026-08-14): Sysmon Event 3 DestinationHostname
+         attribution is unreliable — browsers/curl often log the v4 connect with an empty
+         hostname, the CF/Vercel edge IP isn't in the feed, and server-side PTR can't help (no
+         PTR on CDN edges), so CDN-fronted phishing pages were invisible. New dns_query feed
+         event (LOW) from Sysmon Event 22: the qname always carries the hostname. Same
+         image|qname dedup + cap as the connection feed; quiet/system images skipped. -->
+    <!-- 3.2.4 = Single-watcher guard (found live 2026-08-14 on the test VM): the EDR provision path
+         re-registers + starts the SYSTEM edr-watch task on every enable AND on every agent
+         cutover that re-provisions EDR; a second fire while the first watcher was still alive
+         started a DUPLICATE watcher tailing the same Sysmon log. Two watchers raced on
+         watcher-state.json (recurring "file is being used by another process" log spam) and
+         dropped/raced dns_query + connection feed events between them — a real dns_query for
+         the c2 test host fired in Sysmon but never reached the bastion. Fix: Global named
+         mutex in EdrWatcher.Run() — a second edr-watch process exits immediately. -->
+    <!-- 3.2.5 = registry_persistence false-positive fix (found live 2026-08-15 on the test VM +
+         the test device): Microsoft Edge Update's self-update flow writes CurrentVersion\Run during
+         every update — MicrosoftEdgeUpdateSetup_X86_<ver>.exe stages a copy under
+         %ProgramFiles(x86)%\Microsoft\Temp\EU<hex>.tmp\MicrosoftEdgeUpdate.exe and both touch
+         Run. The temp path looks like a malware staging drop, so it paged HIGH on both boxes.
+          The registry handler now skips any image containing MicrosoftEdgeUpdate (setup exe or
+          staged copy) — legitimate vendor automation, never a finding. -->
+    <!-- 3.2.6 = Manual VLAN subnets for Network Discovery (ARP Scan): the user can now specify
+         additional CIDR subnets (e.g. 192.168.1.0/24 for a camera VLAN) the device should scan
+         alongside auto-detected local interfaces. Configured via the dashboard's per-device
+         Network Discovery panel; stored bastion-side and passed to the scan scripts on every run.
+         Windows: the PS1 reads a JSON file of extra subnets before the ping sweep. Linux: the
+         sentineld binary accepts the extra subnets flag. De-duplication against local interfaces is
+         automatic. Works for both the point-in-time ARP Scan and the continuous ARP Sweep
+         Detection. -->
+    <Version>3.2.6.1</Version>
+    <!-- Display name comes from the version resource, NOT the filename: Task Manager's
+         Processes tab shows FileDescription/ProductName. -->
+    <Product>Sentinel</Product>
+    <Company>SentinelMDM</Company>
+    <Copyright>Copyright © SentinelMDM 2026</Copyright>
+    <Description>Sentinel — authorized remote support connectivity tool</Description>
+    <AssemblyTitle>Sentinel</AssemblyTitle>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Deterministic>true</Deterministic>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <!-- Single self-contained .exe, no .NET runtime install required on the customer's machine. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 2.1.2: Brotli-compresses managed assemblies and native libs in the single-file bundle
+         (~50-60 % on managed code). Historically disabled because GetManifestResourceNames()
+         broke resource enumeration in compressed bundles — all extraction sites now use
+         hardcoded assembly-qualified resource names (xray.exe.gz, rclone.exe.gz, the two
+         .ps1.gz scripts) and never call GetManifestResourceNames(). Smoke-tested on the
+         builder's Linux SDK 8.0.422 (GetManifestResourceStream works); spot-check on a real
+         Windows box before trusting. -->
+    <!-- 2.1.3: two changes: (1) ToS dialog removed from auto-provisioning flow. The installer
+         goes straight to elevated cutover + enrollment with no user prompt (ToS consent is
+         auto-recorded server-side). (2) New SilentInstaller.cs for fully headless
+         install/uninstall/status entry points (silent-install, silent-uninstall, silent-status)
+         for scripted deployment (SCCM, Intune, bastion provisioning pipeline). No UI, no ToS,
+         no UAC dialog. Must run elevated (admin or SYSTEM). silent-install takes an optional
+         enrollment ticket argument. silent-status reports install state to stdout. Exit codes:
+         0=success, 1=generic failure, 2=not elevated, 3=already installed, 4=setup failed. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Account-linked login build variant, mirroring the Android agent's -PadminAgent Gradle flag
+         (BuildConfig.ADMIN_AGENT) — see Config.AdminAgent's doc comment. false (default) = public
+         build, email+password, posts to /login. true = admin/sub-user build, username+password,
+         posts to /api/device-admin/login. Build with: dotnet publish -p:AdminAgent=true
+         Does NOT affect the legacy ad hoc (SessionEmbedded-baked, no login) build path at all. -->
+    <AdminAgent Condition="'$(AdminAgent)'==''">false</AdminAgent>
+    <DefineConstants Condition="'$(AdminAgent)'=='true'">$(DefineConstants);ADMIN_AGENT</DefineConstants>
+    <!-- Auto-provisioning installer variant (2.0.3): per-account exe with enrollment ticket +
+         server URL + ToS version baked in (AutoProvisionEmbedded.cs, generated by bastion-builder's
+         /build-installer). First run: ToS/MSA dialog -> elevated install w/ persistence ->
+         ticket enrollment (no login on the target PC). See AutoProvisionFlow.cs. -->
+    <AutoProvisionBuild Condition="'$(AutoProvisionBuild)'==''">false</AutoProvisionBuild>
+    <DefineConstants Condition="'$(AutoProvisionBuild)'=='true'">$(DefineConstants);AUTOPROVISION_BUILD</DefineConstants>
+    <!-- Set by bastion-builder's build_account_linked_exe() for BOTH variants (public and admin) —
+         distinguishes "a real account-linked build" from a template/dev build now that no
+         account-specific material is embedded at build time (Hop-1 identity is generated per-device
+         at runtime instead — see Hop1Identity.cs). Build with: dotnet publish -p:AccountLinkedBuild=true -->
+    <AccountLinkedBuild Condition="'$(AccountLinkedBuild)'==''">false</AccountLinkedBuild>
+    <DefineConstants Condition="'$(AccountLinkedBuild)'=='true'">$(DefineConstants);ACCOUNT_LINKED_BUILD</DefineConstants>
+    <!-- Two distinct output filenames from one source tree, same convention as the Android APKs
+         (SentinelMDM-<ver>.apk vs SentinelMDM-Admin-<ver>.apk) — never swap which is which; verify
+         by which login endpoint a build's Config.AdminAgent constant resolves to, not the filename
+         alone, if in doubt. -->
+    <AssemblyName Condition="'$(AdminAgent)'=='true'">Sentinel-Admin</AssemblyName>
+  </PropertyGroup>
+
+  <!-- GZip-compress PowerShell scripts before embedding so they're opaque in the binary.
+       ⚠️ 2.0.7 — DELIBERATELY NOT incremental. This target used to carry
+         Inputs="sentinel-setup.ps1;sentinel-uninstall.ps1"
+         Outputs="sentinel-setup.ps1.gz;sentinel-uninstall.ps1.gz"
+       so MSBuild skipped it whenever the .gz was not older than the .ps1. The .gz is a
+       CHECKED-IN artifact and the builder image copies both in via `COPY SentinelRemoteAssist/`,
+       which does not preserve the relative mtime ordering from the working tree — so inside the
+       image the outputs never looked stale, the target was skipped, and the build embedded the
+       PREVIOUS release's script while happily compiling the current C#.
+       Live consequence (2.0.6, found 2026-08-03): the C# half of the Hop-2 key fix shipped and
+       worked (the agent logged "(1 pending)"/"(2 pending)" exactly as intended) while the
+       sentinel-setup.ps1 half — the part that actually splits and INSTALLS those keys — was the
+       old copy, so administrators_authorized_keys still never changed and connect.sh still failed
+       with "Permission denied (publickey)". A build that silently mixes new code with an old
+       embedded script is far worse than re-gzipping two small files on every build, which costs
+       milliseconds. Keep this unconditional. -->
+  <Target Name="CompressScripts" BeforeTargets="BeforeBuild;BeforePublish">
+    <Exec Command="gzip -c &quot;$(ProjectDir)sentinel-setup.ps1&quot; &gt; &quot;$(ProjectDir)sentinel-setup.ps1.gz&quot;" />
+    <Exec Command="gzip -c &quot;$(ProjectDir)sentinel-uninstall.ps1&quot; &gt; &quot;$(ProjectDir)sentinel-uninstall.ps1.gz&quot;" />
+  </Target>
+
+  <!-- GZip-compress the big embedded native binaries before embedding (2.1.2): xray.exe
+       35.6 MB -> ~13 MB, rclone.exe 78.8 MB -> ~27 MB — ~74 MB off the single-file exe.
+       Pre-compressing large opaque binaries is still worthwhile even with
+       EnableCompressionInSingleFile=true (Brotli on pre-compressed data stays tight).
+       Both extraction sites (XrayTransportManager.TryExtractXray, S3DriveManager.TryExtractRclone)
+       decompress on first run, so the on-disk exes are byte-identical to an uncompressed build.
+       DELIBERATELY NOT incremental, same rationale as CompressScripts: the builder image's
+       `COPY SentinelRemoteAssist/` does not preserve working-tree mtimes, so a stale .gz would
+       otherwise be silently re-embedded alongside fresh C#. Unconditional re-gzip is ~2s. -->
+  <Target Name="CompressNativeBinaries" BeforeTargets="BeforeBuild;BeforePublish">
+    <Exec Command="gzip -9 -c &quot;$(ProjectDir)xray.exe&quot; &gt; &quot;$(ProjectDir)xray.exe.gz&quot;" Condition="Exists('$(ProjectDir)xray.exe')" />
+    <Exec Command="gzip -9 -c &quot;$(ProjectDir)rclone.exe&quot; &gt; &quot;$(ProjectDir)rclone.exe.gz&quot;" Condition="Exists('$(ProjectDir)rclone.exe')" />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="OpenSSH-Win64.zip" Condition="Exists('OpenSSH-Win64.zip')" />
+    <EmbeddedResource Include="sentinel-setup.ps1.gz" />
+    <EmbeddedResource Include="sentinel-uninstall.ps1.gz" />
+    <!-- XrayTransportManager.cs's xray-core client binary, gzip-embedded (CompressNativeBinaries
+         generates xray.exe.gz from the checked-in xray.exe every build). Conditional so the build
+         doesn't break before the binary is added; once present, extraction/Start() picks it up
+         automatically. -->
+    <EmbeddedResource Include="xray.exe.gz" Condition="Exists('xray.exe.gz')" />
+    <!-- S3DriveManager.cs's rclone binary (windows/amd64), gzip-embedded — same pattern and
+         conditional-include as xray.exe.gz above. -->
+    <EmbeddedResource Include="rclone.exe.gz" Condition="Exists('rclone.exe.gz')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EventLogReader/EventLogWatcher (System.Diagnostics.Eventing.Reader) for
+         AppControlWatcher.cs — not in the base net8.0-windows BCL, needs this package explicitly. -->
+    <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.0" />
+    <!-- RemoteAssistSocket.cs — Socket.IO v4-protocol client for the SentinelMDM control channel
+         (register/heartbeat/status + server pushes). Verified against the server's socket.io@4.x
+         handshake in RemoteAssistSocket's own doc comment. -->
+    <PackageReference Include="SocketIOClient" Version="3.1.2" />
+    <!-- AiChatForm.cs/ConsentDialog.cs/MainForm.cs — icons and other System.Drawing UI usage. -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

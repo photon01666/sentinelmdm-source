@@ -1,0 +1,45 @@
+# SentinelMDM Remote Assist — Hop-2 sshd config (design plan §3).
+#
+# This is a COMPLETELY SEPARATE sshd identity from the box's real /etc/ssh/sshd_config — own host
+# keys, own authorized-keys mechanism, own (fixed, least-privilege) account. It is never bound to
+# a network-facing address directly: sentinel-hop2.socket only listens on 127.0.0.1, reachable
+# solely from the local xray dokodemo-door that terminates the Hop-1 reverse tunnel. Run via
+# `sshd -i` (inetd mode, one process per connection, no resident listener) — see
+# systemd/sentinel-hop2@.service.
+
+HostKey /etc/sentinel-ra/ssh_host_ed25519_key
+
+AllowUsers sentinel-support
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+
+# UsePAM no — found live: Debian/Ubuntu's sshd defaults to UsePAM yes, and `useradd --system`
+# creates sentinel-support with a LOCKED password field ("!" in /etc/shadow, no `passwd -u`/
+# `chpasswd` ever run — deliberately, since PasswordAuthentication is already off). With PAM
+# enabled, sshd's pam_unix account-management phase rejects a locked account outright
+# ("User sentinel-support not allowed because account is locked") EVEN THOUGH pubkey auth
+# itself succeeds at the protocol layer — confirmed via journalctl on the actual
+# sentinel-hop2@.service instance, client-side only ever sees a generic "Permission denied
+# (publickey)" with no hint why. This is a dedicated, pubkey-only sshd instance (this whole
+# config already sets PasswordAuthentication/KbdInteractiveAuthentication no) — PAM's session/
+# account machinery has nothing meaningful left to check, so disabling it entirely is the
+# correct fix, not a workaround.
+UsePAM no
+
+# The actual dormant/armed gate — see libexec/hop2-authkeys.sh. Must run as a non-root,
+# non-sentinel-support account per sshd's own requirement that AuthorizedKeysCommand run as
+# neither root nor the authenticating user.
+AuthorizedKeysCommand /usr/local/libexec/sentinel-ra/hop2-authkeys.sh
+AuthorizedKeysCommandUser sentinel-ra
+AuthorizedKeysFile none
+
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Nothing here should ever need X11/agent/TCP forwarding for a headless-server support session —
+# keep the surface minimal.
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitTunnel no

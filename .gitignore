@@ -1,0 +1,63 @@
+# ── Secrets and machine-local configuration ────────────────────────────────────
+.env
+.env.*
+!.env.example
+local.properties
+*.keystore
+*.jks
+*.pem
+*.key
+*.p12
+*.pfx
+google-services.json
+device-identity.json
+
+# ── Android ───────────────────────────────────────────────────────────────────
+.gradle/
+build/
+app/build/
+apk/
+*.apk
+*.aab
+captures/
+.cxx/
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.log
+
+# ── Go ────────────────────────────────────────────────────────────────────────
+# xray binaries are extracted at build time by internal/xraytransport/embedded/extract.sh
+linux-agent/sentineld/internal/xraytransport/embedded/xray
+linux-agent/sentineld/internal/xraytransport/embedded/xray-arm64
+bin/
+
+# ── .NET ──────────────────────────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+
+# ── Runtime data ──────────────────────────────────────────────────────────────
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+server/uploads/
+server/apk/
+data/
+streams/
+
+# ── Local tooling / OS ────────────────────────────────────────────────────────
+.wrangler/
+.claude/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+tmp/

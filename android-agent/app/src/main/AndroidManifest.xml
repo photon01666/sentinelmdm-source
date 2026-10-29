@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Android 13+ (API 33): reading the CONNECTED WiFi SSID/BSSID needs this in addition to
+         location, otherwise getSSID() is redacted to "<unknown ssid>" even with location ON.
+         No neverForLocation flag: the agent legitimately correlates WiFi with location, and the
+         flag would sanitize the nearby-AP scan list used for rogue-AP detection. -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- Android 13+ (API 33): protectionLevel="normal", no runtime grant needed. Lets the agent READ
+         whether Advanced Protection is on so it can detect that APM unbound our AccessibilityService
+         and re-assert the Device Owner accessibility allowlist. Read-only — declaring it grants no
+         ability to enable or change APM. -->
+    <uses-permission android:name="android.permission.QUERY_ADVANCED_PROTECTION_MODE" />
+
+    <!-- Location -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Camera -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Microphone -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- External storage (pre-Android 13) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <!-- Full filesystem access for file delete (Android 11+) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- Media access (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- Find Phone -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Foreground service base -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- API 34: fine-grained foreground service permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Call log & SMS -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!-- Wake lock and boot -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Exact alarm for OTA self-restart: AlarmManager.setExact() fires a startService()
+         intent after our process dies, restarting the service on the newly-installed APK.
+         Auto-granted for preinstalled system apps; no user dialog required. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Do Not Disturb access (emergency mode silences all notifications) -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- Silent APK self-update via PackageInstaller (Device Owner) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- INSTALL_PACKAGES intentionally NOT requested under the /data/app + Device Owner model:
+         a Device Owner silently self-installs updates via PackageInstaller with
+         setRequireUserAction(USER_ACTION_NOT_REQUIRED) — the privileged permission is unnecessary.
+         (The old FLAG_UPDATED_SYSTEM_APP reboot-rollback concern was specific to a /system copy;
+         in /data/app there is no system-image version to revert to.) -->
+    <!-- REQUEST_INSTALL_PACKAGES (above) is the normal permission that backs the install flow. -->
+
+    <!-- Package visibility (Android 11+): enumerate all installed apps -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- Per-app usage time for battery stats tab (user must grant in Settings > Special App Access) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+    <!-- Contacts + Calendar -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!-- Send SMS -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- Bluetooth scanning (BLE + classic discovery) for tracker detection & device enumeration -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30"
+        tools:ignore="ProtectedPermissions" />
+    <!-- BLUETOOTH_ADMIN is required for classic discovery (startDiscovery) below API 31;
+         above 30 it's folded into BLUETOOTH_SCAN. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Notification listener (declared in service; READ_NOTIFICATIONS for API 33+) -->
+    <uses-permission android:name="android.permission.READ_NOTIFICATIONS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Device Owner can use WRITE_SECURE_SETTINGS to self-grant notification listener access -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build only: reboot device after OTA is applied (priv-app + REBOOT permission) -->
+    <uses-permission android:name="android.permission.REBOOT"
+        tools:ignore="ProtectedPermissions" />
+    <!-- System build only: trigger update_engine OTA apply (priv-app + UPDATE_ENGINE_STABLE) -->
+    <uses-permission android:name="android.permission.UPDATE_ENGINE_STABLE"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build only: activate as Device Admin / Device Owner without user interaction.
+         Signature|privileged — ignored on normal installs, granted by privapp-permissions-sentinel.xml. -->
+    <uses-permission android:name="android.permission.MANAGE_DEVICE_ADMINS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Lets the Device Owner self-exempt from battery optimization / App Standby via
+         dpm.setApplicationExemptions() on STOCK Android (Android 14+ DPC permission model
+         requires the DPC to declare the matching MANAGE_DEVICE_POLICY_* permission).
+         See DeviceOwnerHelper.exemptSelfFromBatteryOptimization(). -->
+    <uses-permission android:name="android.permission.MANAGE_DEVICE_POLICY_APP_EXEMPTIONS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Stock-Android fallback: a /data/app Device Owner is NOT authorized for
+         setApplicationExemptions ("Calling identity is not authorized"), so the agent prompts the
+         parent once during enrollment to whitelist itself from battery optimization. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- System build: battery stats without Special App Access prompt -->
+    <uses-permission android:name="android.permission.BATTERY_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: self-grant usage-stats AppOp (PACKAGE_USAGE_STATS) -->
+    <uses-permission android:name="android.permission.MANAGE_APP_OPS_MODES"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: per-UID network usage without IMSI -->
+    <uses-permission android:name="android.permission.READ_NETWORK_USAGE_HISTORY"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: wipe via RecoverySystem -->
+    <uses-permission android:name="android.permission.RECOVERY"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: turn screen off as lock-device fallback -->
+    <uses-permission android:name="android.permission.DEVICE_POWER"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Privileged phone state (IMSI, cell info) -->
+    <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Clear another app's user data without Device Owner -->
+    <uses-permission android:name="android.permission.CLEAR_APP_USER_DATA"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: set user restrictions (factory reset, safe boot, USB, ADB, add user)
+         without Device Owner. MANAGE_USERS is signature|privileged — granted via
+         privapp-permissions-sentinel.xml. On Android 14+ the system also accepts
+         MANAGE_PROFILE_AND_DEVICE_OWNERS; the companion ROM patch covers older versions. -->
+    <uses-permission android:name="android.permission.MANAGE_USERS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: grant runtime permissions to any app (e.g. Lock App Permissions
+         for non-DO builds). signature|privileged — granted via privapp-permissions-sentinel.xml. -->
+    <uses-permission android:name="android.permission.GRANT_RUNTIME_PERMISSIONS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: revoke runtime permissions (counterpart to GRANT_RUNTIME_PERMISSIONS).
+         Required for the "Deny" state in per-app permission management on root builds. -->
+    <uses-permission android:name="android.permission.REVOKE_RUNTIME_PERMISSIONS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: disable/enable status bar (quick-settings pull-down) without Device Owner.
+         StatusBarManager.disable2() requires STATUS_BAR; signature|privileged. -->
+    <uses-permission android:name="android.permission.STATUS_BAR"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: suspend/unsuspend apps without Device Owner (Android 9+).
+         PackageManager.setPackagesSuspended() requires SUSPEND_APPS; signature|privileged. -->
+    <uses-permission android:name="android.permission.SUSPEND_APPS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: silent screen mirror via DisplayManager.createVirtualDisplay()
+         with VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR — no MediaProjection token, no user dialog.
+         Normally pure-signature; the patch-capture-video-output-privapp.py ROM patch
+         changes it to signature|privileged so priv-app installs can hold it.
+         Falls back to AccessibilityService path if this permission is unavailable. -->
+    <uses-permission android:name="android.permission.CAPTURE_VIDEO_OUTPUT"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: uninstall packages silently and block uninstall for user via
+         IPackageManager.setBlockUninstallForUser() in setUninstallBlocked().
+         Must be declared here — privapp-permissions-sentinel.xml whitelist alone is NOT
+         sufficient; the permission is never granted if it is absent from the manifest. -->
+    <uses-permission android:name="android.permission.DELETE_PACKAGES"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- System build: re-enable camera / microphone via SensorPrivacyManager when
+         DISALLOW_CAMERA_TOGGLE / DISALLOW_MICROPHONE_TOGGLE restriction is turned off.
+         SensorPrivacyManager.setSensorPrivacy() throws SecurityException without this.
+         signature|privileged — granted via privapp-permissions-sentinel.xml. -->
+    <uses-permission android:name="android.permission.MANAGE_SENSOR_PRIVACY"
+        tools:ignore="ProtectedPermissions" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="true">
+        <!-- android:persistent removed for the /data/app model: it gives NO benefit there
+             (AMS auto-starts persistent processes only for FLAG_SYSTEM apps) yet PMS blocks ALL
+             updates of a persistent app at install time (InstallPackageHelper: "Persistent apps
+             are not updateable"). Verified in frameworks/base: PackageInfoUtils.appInfoFlags()
+             sets FLAG_PERSISTENT straight from the manifest with no system-app gate, and
+             PackageSetting.isPersistent() reads that bit — so leaving it would block /data/app
+             OTA self-updates too. Persistence now comes from the foreground MonitoringService +
+             BootReceiver + Device-Owner-cannot-be-force-stopped. -->
+
+        <!-- AccountLinkActivity is the launcher entry point.
+             It shows a login popup for self-install users and passes through
+             to MainActivity for admin-provisioned (Device Owner / Profile Owner) devices.
+             For BYOD work-profile provisioning, it can also launch ACTION_PROVISION_MANAGED_PROFILE
+             so the user sees a consent screen and the app becomes the Profile Owner. -->
+        <activity
+            android:name=".AccountLinkActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SentinelMDM">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- BYOD self-provisioning: the user taps "Set up supervised profile" and
+                 Android shows the work-profile consent dialog. After acceptance the agent
+                 becomes Profile Owner of the new managed profile. -->
+            <intent-filter>
+                <action android:name="android.app.action.PROVISION_MANAGED_PROFILE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.profile.PROFILE_OWNER"
+                android:value="com.android.systemservices/.DeviceAdminReceiver" />
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
+
+        <activity android:name=".SetupActivity" android:exported="false" />
+
+        <!-- Fake shutdown screen (theft mode). Black fullscreen activity shown over the
+             lock screen; released remotely only. Never in recents, never exported. -->
+        <activity
+            android:name=".TheftFakeShutdownActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <activity
+            android:name=".WebDashboardActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <service
+            android:name=".MonitoringService"
+            android:exported="false"
+            android:foregroundServiceType="location|camera|microphone|mediaProjection|dataSync" />
+
+        <!-- Last-resort captive-portal solver for JS-driven splash pages. Runs in a SEPARATE process
+             (:captive) so its bindProcessToNetwork() pins ONLY this process to the captive WiFi and
+             never drags MonitoringService (REALITY/cellular control channel) onto it. -->
+        <service
+            android:name=".CaptivePortalWebViewService"
+            android:exported="false"
+            android:process=":captive"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Full-device VPN that tunnels all traffic over REALITY (on open WiFi, or always via the
+             manual WebUI toggle). The intent-filter + BIND_VPN_SERVICE permission make it eligible to
+             be the Device Owner's always-on VPN package (consent pre-granted, no user dialog). -->
+        <service
+            android:name=".SentinelVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".DeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".SecretCodeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SECRET_CODE" />
+                <data android:scheme="android_secret_code" android:host="5437" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
+
+        <!-- Receives the "Delay 30 minutes" action from the OTA reboot countdown notification -->
+        <receiver
+            android:name=".OtaRebootDelayReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.android.systemservices.action.OTA_REBOOT_DELAY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- exported=false is correct: geofence transitions arrive via a PendingIntent
+             CREATED BY THIS APP, and broadcasts sent through a PendingIntent always
+             execute with the creator's identity — regardless of whether LocationManager
+             or Play Services triggers them. Exporting this receiver would let any app
+             spoof ENTER/EXIT broadcasts and fabricate geofence alerts. -->
+        <receiver
+            android:name=".GeofenceReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".ScreenshotService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <service
+            android:name=".NotificationService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

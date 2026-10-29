@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">System Services</string>
+    <string name="notif_channel_name">System Services</string>
+    <string name="notif_title">System Services</string>
+    <string name="notif_text">System maintenance is active.</string>
+    <string name="accessibility_description">Allows System Services to capture the screen.</string>
+</resources>

@@ -1,0 +1,17 @@
+{
+  // Looser, app.js-only check for the BROWSER WebUI. DOM lib + relaxed strict so the 13k-line
+  // <script>-loaded script gets real DOM / type checking without an implicit-any + undeclared-
+  // global flood. Run via `npm run typecheck:webui`. app.js has no module syntax; webui.d.ts
+  // declares the external libs (google/bootstrap/Stripe/io) and the window.* globals it uses.
+  // The strict gate (tsconfig.json) and the server check (tsconfig.server.json) are unaffected.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": [],
+    "strict": false,
+    "checkJs": true,
+    "noEmit": true
+  },
+  "include": ["public/app.js", "webui.d.ts"],
+  "exclude": ["node_modules"]
+}

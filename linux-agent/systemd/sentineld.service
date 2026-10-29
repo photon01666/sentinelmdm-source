@@ -1,0 +1,37 @@
+[Unit]
+Description=SentinelMDM Remote Assist agent (boot-resident Hop-1 tunnel + control channel)
+Documentation=https://example.com
+# On fleet-mode ISO builds a sentinel-enroll.service oneshot runs first (generates the fresh
+# per-boot device identity + consumes one baked-ticket use) and sentinel-timesync.service waits
+# for NTP so the signed-auth reconnect isn't rejected by clock skew. On normal installs those
+# units are absent — ordering after a nonexistent unit is harmless.
+After=network-online.target sentinel-enroll.service sentinel-timesync.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel-ra
+Group=sentinel-ra
+ExecStart=/usr/local/bin/sentineld run
+Restart=on-failure
+RestartSec=10
+# NOTE (design plan §1): the Hop-1/Hop-2 transport this depends on is not yet implemented in this
+# build — `sentineld run` currently exits immediately with an explanatory error. This unit is
+# still shipped now (not left for later) so the account/permissions/logging shape is exercised
+# and reviewable before the transport lands; it will restart-loop harmlessly (10s backoff) until
+# then. Do not `systemctl enable` this by default until the transport is live — see install.sh.
+
+# Least-privilege posture (design plan §1): sentineld itself never runs as root. Privileged
+# mutations (service/package management, once implemented) go through a narrowly-scoped sudoers
+# allowlist, not this service's own ambient privilege.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/sentinel-ra /run/sentinel-ra
+StateDirectory=sentinel-ra
+RuntimeDirectory=sentinel-ra
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

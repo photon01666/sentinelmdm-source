@@ -1,0 +1,8 @@
+{
+  "name": "sio-test-server",
+  "private": true,
+  "description": "Local socket.io v4 server used ONLY to test client.go's hand-rolled Engine.IO/Socket.IO framing against a real implementation. Not part of the shipped agent.",
+  "dependencies": {
+    "socket.io": "^4"
+  }
+}

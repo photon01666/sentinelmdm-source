@@ -1,0 +1,7 @@
+# Managed by sentinel-remote-assist install.sh — do not edit by hand, re-run install.sh instead.
+# Full-root grant for the Hop-2 login account, matching the Windows agent's sentinel-support (local
+# Administrator) posture — widened 2026-08-06 at the user's explicit request (the scoped
+# 4-command allowlist below this comment is historical; install.sh carries the same ALL=(ALL)
+# grant). A live support session must be able to run the full IT Audit including root-only
+# checks and any admin action the bastion dispatches.
+sentinel-support ALL=(ALL) NOPASSWD: ALL

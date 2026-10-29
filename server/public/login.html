@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SentinelMDM — Login</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=3">
+  <link rel="icon" href="/favicon.ico?v=3" sizes="any">
+  <link rel="apple-touch-icon" href="/icon-192.png?v=3">
+  <link rel="stylesheet" href="/vendor/bootstrap/5.3.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      background: #000;
+      padding-top: 6vh;
+    }
+    .login-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 380px;
+    }
+    .login-card {
+      width: 100%;
+      border-radius: 14px;
+      box-shadow: 0 12px 48px rgba(0,0,0,.65);
+      background: #000;
+      border: 1px solid rgba(255,255,255,.14);
+    }
+    .step { display: none; }
+    .step.active { display: block; }
+    #err-msg { display: none; }
+    .totp-input { letter-spacing: .35em; font-size: 1.6rem; text-align: center; font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 600px) {
+      body { padding-top: 4vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+  <div class="card login-card p-4">
+
+    <div class="text-center mb-4">
+      <img src="/logo.png?v=2" alt="SentinelMDM" class="mb-2" style="width:80%;max-width:240px;height:auto">
+      <small id="step-label" class="d-block text-muted">Sign in to continue</small>
+    </div>
+
+    <div id="err-msg" class="alert alert-danger py-2 text-center small mb-3"></div>
+
+    <!-- Step 1: Email + Password -->
+    <form id="form-password" class="step active" method="post">
+      <div class="mb-3">
+        <label id="lbl-user" class="form-label fw-semibold">Email</label>
+        <input id="inp-user" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" autofocus>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Password</label>
+        <input id="inp-pass" type="password" class="form-control" autocomplete="current-password">
+      </div>
+      <button type="submit" id="btn-password" class="btn btn-primary w-100 fw-semibold">
+        <i class="bi bi-arrow-right-circle me-1"></i> Continue
+      </button>
+      <div id="passkey-block" class="d-none">
+        <div class="text-center text-muted my-2" style="font-size:.78rem">— or —</div>
+        <button type="button" id="btn-passkey" class="btn btn-outline-light w-100 fw-semibold" onclick="doPasskeyLogin()">
+          <i class="bi bi-fingerprint me-1"></i> Sign in with a passkey
+        </button>
+      </div>
+    </form>
+
+    <!-- Step 2: TOTP code -->
+    <form id="form-totp" class="step" method="post">
+      <p class="text-muted small text-center mb-3">
+        Open your authenticator app and enter the 6-digit code for <strong>SentinelMDM</strong>.
+      </p>
+      <div class="mb-4">
+        <input id="inp-totp" type="text" inputmode="numeric" pattern="[0-9 ]*"
+          maxlength="7" autocomplete="one-time-code"
+          class="form-control totp-input" placeholder="000000">
+      </div>
+      <button type="submit" id="btn-totp" class="btn btn-primary w-100 fw-semibold">
+        <i class="bi bi-shield-check me-1"></i> Verify
+      </button>
+
+    </form>
+
+    <hr class="border-secondary mt-3 mb-2">
+    <p id="register-link" class="text-center mb-0" style="font-size:.85rem">
+      Don't have an account? <a href="/register" class="text-primary">Create one</a>
+    </p>
+
+  </div>
+  </div>
+
+  <script src="/webauthn-client.js"></script>
+  <script nonce="__CSP_NONCE__">
+    const LOGIN_BASE = window.location.pathname.replace(/\/$/, '');
+
+    // This page is shared by three routes. Only the public /login is email-only;
+    // /admin/login and /admin/subusers/login accept a username OR an email, so
+    // relax the field there (type=email would block a bare username on submit).
+    if (LOGIN_BASE !== '/login') {
+      const u = document.getElementById('inp-user');
+      u.type = 'text';
+      u.autocomplete = 'username';
+      u.placeholder = 'username or email';
+      document.getElementById('lbl-user').textContent = 'Username or Email';
+    }
+
+    // Passkey sign-in — usernameless, replaces username+password+OTP in one step. The
+    // SentinelPasskey module handles the WebAuthn ceremony and (for public users) the PRF→ZK
+    // unlock into sessionStorage. Only surfaced when the browser/device supports it.
+    if (window.SentinelPasskey && SentinelPasskey.supported()) {
+      const pb = document.getElementById('passkey-block');
+      if (pb) pb.classList.remove('d-none');
+    }
+    async function doPasskeyLogin() {
+      hideErr();
+      const btn = document.getElementById('btn-passkey');
+      setLoading(btn, true);
+      try {
+        const data = await SentinelPasskey.login();
+        window.location.href = data.redirect || _nextParam || '/';
+      } catch (e) {
+        // A user cancelling the OS prompt throws NotAllowedError — keep that quiet-ish.
+        showErr(/NotAllowed|AbortError/.test(e.name || '') ? 'Passkey sign-in cancelled.' : (e.message || 'Passkey sign-in failed'));
+        setLoading(btn, false);
+      }
+    }
+
+    const errMsg = document.getElementById('err-msg');
+
+    function showErr(msg) {
+      errMsg.textContent = msg;
+      errMsg.style.display = 'block';
+    }
+    function hideErr() { errMsg.style.display = 'none'; }
+
+    function setLoading(btn, loading) {
+      if (loading) {
+        btn.disabled = true;
+        btn.dataset.orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Please wait…';
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.orig;
+      }
+    }
+
+    let _pendingPassword = '';  // held briefly to derive KEK if user is a public ZK account
+    let _zkKeyDerivationPromise = null; // stored during TOTP step so we can await before redirect
+    let _zkProvisionData = null; // first-login staff keypair to POST once authenticated
+    // Post-login deep link (e.g. the sign-in email's "Secure my account" → /?secure=account).
+    // Same-origin relative paths only — never an open redirect.
+    const _nextParam = (() => {
+      try { const n = new URLSearchParams(location.search).get('next') || '';
+        return (n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/\\')) ? n : ''; }
+      catch { return ''; }
+    })();
+
+    // Auth prehash ("prehash-v1") — the plaintext password never rides to the server. We ask
+    // /api/auth/prelogin for this account's KDF salt, PBKDF2 the password locally, and submit
+    // the hash; the server stores/compares bcrypt over it. `migrate:true` (a row still on the
+    // old bcrypt(plaintext) form) sends the plaintext one FINAL time — that login upgrades the
+    // row server-side. A prelogin error is a hard failure, never a silent plaintext fallback.
+    async function computeAuthPrehash(password, saltB64, iterations) {
+      const domain = new TextEncoder().encode('sentinel-auth-v1|');
+      const raw    = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+      const salt   = new Uint8Array(domain.length + raw.length);
+      salt.set(domain); salt.set(raw, domain.length);
+      const key  = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iterations || 600000, hash: 'SHA-256' }, key, 256);
+      return btoa(String.fromCharCode(...new Uint8Array(bits)));
+    }
+    async function buildLoginCreds(identifier, password) {
+      const r = await fetch('/api/auth/prelogin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier }),
+      });
+      if (!r.ok) throw new Error('prelogin failed');
+      const d = await r.json();
+      if (d.migrate || d.scheme !== 'prehash-v1' || !d.auth_salt) return { password };
+      return { authHash: await computeAuthPrehash(password, d.auth_salt, d.iterations) };
+    }
+
+    // Step 1 — password
+    document.getElementById('form-password').addEventListener('submit', async e => {
+      e.preventDefault();
+      hideErr();
+      const btn = document.getElementById('btn-password');
+      setLoading(btn, true);
+      _pendingPassword = document.getElementById('inp-pass').value;
+      try {
+        const creds = await buildLoginCreds(document.getElementById('inp-user').value, _pendingPassword);
+        const r = await fetch(LOGIN_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('inp-user').value,
+            ...creds,
+          })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          _pendingPassword = '';
+          showErr(data.error || 'Invalid credentials');
+          setLoading(btn, false);
+          return;
+        }
+        if (data.totp_required) {
+          // Start ZK key derivation in the background while user enters 2FA code.
+          // We store the Promise so the TOTP submit handler can await it before
+          // redirecting — this prevents a race where derivation hasn't finished
+          // by the time window.location.href fires and the page navigates away.
+          if (data.zk_provision) {
+            // Support staff (admin/sub) first login — generate a personal keypair now (password in
+            // hand) and store the private key; POST it to the server after 2FA completes (requireAuth).
+            _zkProvisionData = await generateAndWrapZkKey(_pendingPassword).catch(() => null);
+            if (_zkProvisionData) try { sessionStorage.setItem('zk_priv_key', _zkProvisionData.rawPrivB64); } catch {}
+          } else if (data.zk_salt && data.zk_encrypted_priv_key) {
+            _zkKeyDerivationPromise = deriveAndStoreZkKey(
+              _pendingPassword, data.zk_salt, data.zk_encrypted_priv_key
+            ).catch(() => {});
+          }
+          _pendingPassword = '';
+          document.getElementById('form-password').classList.remove('active');
+          document.getElementById('form-totp').classList.add('active');
+          document.getElementById('step-label').textContent = 'Enter your 2FA code';
+          document.getElementById('inp-totp').focus();
+        } else {
+          // No 2FA: derive (or provision) the ZK key, then redirect. The password-step response is
+          // already authenticated for sub-users, so the provision POST below succeeds immediately.
+          if (data.zk_provision) {
+            const kp = await generateAndWrapZkKey(_pendingPassword).catch(() => null);
+            if (kp) {
+              try { sessionStorage.setItem('zk_priv_key', kp.rawPrivB64); } catch {}
+              await fetch('/api/users/me/zk_keypair', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zk_public_key: kp.zk_public_key, zk_encrypted_priv_key: kp.zk_encrypted_priv_key, zk_salt: kp.zk_salt }) }).catch(() => {});
+            }
+          } else if (data.zk_salt && data.zk_encrypted_priv_key) {
+            await deriveAndStoreZkKey(_pendingPassword, data.zk_salt, data.zk_encrypted_priv_key)
+              .catch(() => {});
+          }
+          _pendingPassword = '';
+          window.location.href = data.redirect || _nextParam || '/';
+        }
+      } catch {
+        _pendingPassword = '';
+        showErr('Network error — check connection');
+        setLoading(btn, false);
+      }
+    });
+
+    // Derive KEK from password + salt, decrypt the ZK private key, store in sessionStorage
+    async function deriveAndStoreZkKey(password, zkSalt, zkEncPriv) {
+      try {
+        const saltBytes = Uint8Array.from(atob(zkSalt), c => c.charCodeAt(0));
+        const passKey   = await crypto.subtle.importKey(
+          'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
+        );
+        const kekBits = await crypto.subtle.deriveBits(
+          { name: 'PBKDF2', salt: saltBytes, iterations: 600000, hash: 'SHA-256' },
+          passKey, 256
+        );
+        const kek      = await crypto.subtle.importKey('raw', kekBits, { name: 'AES-GCM' }, false, ['decrypt']);
+        const combined = Uint8Array.from(atob(zkEncPriv), c => c.charCodeAt(0));
+        const iv       = combined.slice(0, 12);
+        const ct       = combined.slice(12);
+        const privDer  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, kek, ct);
+        // Store raw private key bytes in sessionStorage so app.js can use for DEK unwrapping
+        sessionStorage.setItem('zk_priv_key', btoa(String.fromCharCode(...new Uint8Array(privDer))));
+      } catch (e) {
+        console.warn('ZK key derivation failed:', e);
+      }
+    }
+
+    // Generate a fresh EC P-256 keypair and wrap the private key under the login password
+    // (PBKDF2-600k → AES-256-GCM), matching deriveAndStoreZkKey's unwrap format. Used the FIRST
+    // time support staff (admin/sub) sign in, so they get a stable personal key for E2E Conversations.
+    async function generateAndWrapZkKey(password) {
+      const kp        = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+      const pubSpki   = new Uint8Array(await crypto.subtle.exportKey('spki',  kp.publicKey));
+      const privPkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+      const salt      = crypto.getRandomValues(new Uint8Array(16));
+      const passKey   = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const kekBits   = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' }, passKey, 256);
+      const kek       = await crypto.subtle.importKey('raw', kekBits, { name: 'AES-GCM' }, false, ['encrypt']);
+      const iv        = crypto.getRandomValues(new Uint8Array(12));
+      const ct        = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, privPkcs8));
+      const combined  = new Uint8Array(iv.length + ct.length); combined.set(iv); combined.set(ct, iv.length);
+      const b64       = u8 => btoa(String.fromCharCode(...u8));
+      return { zk_public_key: b64(pubSpki), zk_encrypted_priv_key: b64(combined), zk_salt: b64(salt), rawPrivB64: b64(privPkcs8) };
+    }
+
+    // Step 2 — TOTP
+    document.getElementById('form-totp').addEventListener('submit', async e => {
+      e.preventDefault();
+      hideErr();
+      const btn = document.getElementById('btn-totp');
+      setLoading(btn, true);
+      try {
+        const r = await fetch(LOGIN_BASE + '/totp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: document.getElementById('inp-totp').value })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          showErr(data.error || 'Invalid code');
+          document.getElementById('inp-totp').value = '';
+          document.getElementById('inp-totp').focus();
+          setLoading(btn, false);
+          return;
+        }
+        // Ensure the ZK key derivation that started during step 1 has fully completed
+        // and written to sessionStorage before we navigate away. Without this await,
+        // a fast TOTP entry races the 600k-iteration PBKDF2 and the key is never stored.
+        if (_zkKeyDerivationPromise) {
+          await _zkKeyDerivationPromise;
+          _zkKeyDerivationPromise = null;
+        }
+        // First-login staff: now authenticated → persist the generated personal keypair server-side.
+        if (_zkProvisionData) {
+          await fetch('/api/users/me/zk_keypair', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ zk_public_key: _zkProvisionData.zk_public_key, zk_encrypted_priv_key: _zkProvisionData.zk_encrypted_priv_key, zk_salt: _zkProvisionData.zk_salt }) }).catch(() => {});
+          _zkProvisionData = null;
+        }
+        window.location.href = data.redirect || _nextParam || '/';
+      } catch {
+        showErr('Network error — check connection');
+        setLoading(btn, false);
+      }
+    });
+
+    // Auto-format TOTP input as user types (strip non-digits)
+    document.getElementById('inp-totp').addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g, '').slice(0, 6);
+    });
+  </script>
+</body>
+</html>

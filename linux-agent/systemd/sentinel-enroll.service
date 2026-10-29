@@ -1,0 +1,26 @@
+[Unit]
+Description=SentinelMDM first-boot enrollment (baked installer ticket)
+Documentation=https://example.com
+# Only exists on ISO builds that baked a ticket (fleet-maintenance mode). Normal installs have
+# no /etc/sentinel-ra/enrollment-ticket, so this unit is absent or the Condition fails and the
+# daemon just starts unenrolled (interactive `sentineld enroll` is then the path).
+ConditionPathExists=/etc/sentinel-ra/enrollment-ticket
+Before=sentineld.service
+
+[Service]
+Type=oneshot
+User=sentinel-ra
+Group=sentinel-ra
+# The enroll step only generates local identity keys + persists state — NO network needed (the
+# ticket is consumed at the daemon's first connect), so it can run as soon as the filesystem is
+# ready, before the daemon that depends on it.
+ExecStart=/usr/local/libexec/sentinel-ra/enroll-once.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/sentinel-ra
+StateDirectory=sentinel-ra
+
+[Install]
+WantedBy=multi-user.target
