@@ -68,6 +68,7 @@ npm run typecheck          # optional, runs tsc over server + web UI
 
 ADMIN_PASS="$(openssl rand -hex 16)" \
 SESSION_SECRET="$(openssl rand -hex 32)" \
+HWID_KEY="$(openssl rand -hex 32)" \
 SERVER_ORIGIN="http://localhost:3000" \
 npm start
 ```

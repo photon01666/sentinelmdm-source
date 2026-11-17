@@ -29,6 +29,7 @@ npm ci
 
 export ADMIN_PASS="$(openssl rand -hex 16)"
 export SESSION_SECRET="$(openssl rand -hex 32)"
+export HWID_KEY="$(openssl rand -hex 32)"       # required; no default
 export SERVER_ORIGIN="http://localhost:3000"
 
 npm start
