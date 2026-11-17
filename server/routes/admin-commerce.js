@@ -1,7 +1,7 @@
 // routes/admin-commerce.js — admin management of products / orders / RMA / trials (admin-only).
 // Extracted verbatim from server.js. All routes are requireAdmin. Deps injected (no TDZ).
 
-module.exports = function registerAdminCommerceRoutes({ app, db, shopStmts, requireAdmin, CRYPTO_PLAN_PRICES, DAY_MS, PLAN_META, STRIPE_PLANS, computePrice, daysRemaining, decryptBuffer, decryptText, hwidHmac, log, notifyAdmin, r2Get, rmaWindowState }) {
+module.exports = function registerAdminCommerceRoutes({ app, db, shopStmts, requireAdmin, CRYPTO_PLAN_PRICES, DAY_MS, PLAN_META, STRIPE_PLANS, computePrice, daysRemaining, decryptBuffer, decryptText, hwidHmac, hwidHmacCandidates, log, notifyAdmin, r2Get, rmaWindowState }) {
 // ════════════════ ADMIN — products / orders / RMA / trials ════════════════════
 // Manual pricing CRUD
 app.get('/api/admin/products', requireAdmin, async (_req, res) => {
@@ -152,9 +152,9 @@ app.post('/api/admin/rma/:id/inspect', requireAdmin, async (req, res) => {
   let serialVerified = b.serial_verified ? 1 : 0;
   let autoMatch = null;
   if (b.returned_serial) {
-    const hmac = hwidHmac(String(b.returned_serial));
+    const hmacs = hwidHmacCandidates(String(b.returned_serial));
     const bound = (await shopStmts.entByOrder.all(r.order_id));
-    if (bound.length) { autoMatch = bound.some(e => e.hardware_id_hmac === hmac); if (autoMatch) serialVerified = 1; }
+    if (bound.length) { autoMatch = bound.some(e => hmacs.includes(e.hardware_id_hmac)); if (autoMatch) serialVerified = 1; }
   }
   const condPass = b.condition_pass == null ? null : (b.condition_pass ? 1 : 0);
   (await shopStmts.setRmaInspection.run(serialVerified, condPass, String(b.notes || '').slice(0, 1000),

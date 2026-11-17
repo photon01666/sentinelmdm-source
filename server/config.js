@@ -101,11 +101,12 @@ if (!TOTP_SECRET) {
 // ── Signal configuration ──────────────────────────────────────────────────────
 const SIGNAL_API_URL = process.env.SIGNAL_API_URL || 'http://signal-api_swarm:8080';
 const SIGNAL_SENDER  = readSecret('sentinel_signal_sender', 'SIGNAL_SENDER');
-const SIGNAL_GROUP   = readSecret('sentinel_signal_group',  'SIGNAL_GROUP', '[REDACTED_SIGNAL_GROUP]');
-const SIGNAL_SECURITY_GROUP = readSecret('sentinel_signal_security_group', 'SIGNAL_SECURITY_GROUP',
-  '[REDACTED_SIGNAL_SECURITY_GROUP]');
-const SIGNAL_HYBRID_GROUP = readSecret('sentinel_signal_hybrid_group', 'SIGNAL_HYBRID_GROUP',
-  '[REDACTED_SIGNAL_HYBRID_GROUP]');
+const SIGNAL_GROUP   = readSecret('sentinel_signal_group',  'SIGNAL_GROUP');
+const SIGNAL_SECURITY_GROUP = readSecret('sentinel_signal_security_group', 'SIGNAL_SECURITY_GROUP');
+const SIGNAL_HYBRID_GROUP = readSecret('sentinel_signal_hybrid_group', 'SIGNAL_HYBRID_GROUP');
+if (!SIGNAL_GROUP || !SIGNAL_SECURITY_GROUP || !SIGNAL_HYBRID_GROUP) {
+  console.warn('One or more Signal group secrets are unset — those notification channels will be disabled.');
+}
 
 // ── App-layer encryption key ──────────────────────────────────────────────────
 const SERVER_ENC_KEY_PEM = readSecret('sentinel_enc_private_key', 'SERVER_ENC_KEY_PEM');

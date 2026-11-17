@@ -1422,7 +1422,8 @@ const { parseUA } = require('./helpers/parse-ua')();
 
 // Deterministic daily salt: HMAC(session_secret, 'analytics-YYYY-MM-DD').
 // Rotates at UTC midnight. Survives server restarts within the same day.
-const _analyticsSaltBase = readSecret('sentinel_session_secret', 'SESSION_SECRET') || '[REDACTED_ANALYTICS_SALT]';
+// If SESSION_SECRET is absent, use a fresh random salt rather than a public literal.
+const _analyticsSaltBase = readSecret('sentinel_session_secret', 'SESSION_SECRET') || crypto.randomBytes(32).toString('hex');
 const { getDailySalt } = require('./helpers/get-daily-salt')({ _analyticsSaltBase, crypto });
 
 // Bot-traffic UA classification — presentation/analytics only, NOT a security control
@@ -2018,13 +2019,13 @@ const guestReadRateLimit    = makeRateLimit(2000, 60 * 60 * 1000, 'guestread');
 const botLogRateLimit       = makeRateLimit(600, 60 * 60 * 1000, 'botlog',
   req => (req.headers['x-bot-ip'] || '').toString().trim() || 'botlog');
 const sha256hex = s => crypto.createHash('sha256').update(String(s)).digest('hex');
-const { HWID_KEY } = require('./helpers/hwid-key')({ readSecret });
-const { hwidHmac } = require('./helpers/hwid-hmac')({ HWID_KEY, crypto });
+const { HWID_KEY, HWID_KEY_LEGACY } = require('./helpers/hwid-key')({ readSecret });
+const { hwidHmac, hwidHmacCandidates } = require('./helpers/hwid-hmac')({ HWID_KEY, HWID_KEY_LEGACY, crypto });
 // ════ Public registration — routes/register.js ════
 require('./routes/register')({ app, AUTH_SCHEME_PREHASH, EMAIL_CODE_TTL_MS,
   PUBLIC_USER_DEFAULT_FEATURES, QRCode, bcrypt, computeAuthPrehash,
   createDemoDeviceForUser, crypto, db, decryptText, encryptText, genEmailCode,
-  genRef, hwidHmac, log, looksLikeAuthHash, looksLikeAuthSalt, makeChatRateLimit,
+  genRef, hwidHmac, hwidHmacCandidates, log, looksLikeAuthHash, looksLikeAuthSalt, makeChatRateLimit,
   makeRateLimit, newAuthSalt, notifyAdminForUser, notifyPush,
   recordPolicyAcceptances, recordTosAcceptance, sendApprovalEmail, sendAuthPage,
   sendEmailVerifyCode, sha256hex, shopStmts, stmts, totpRateLimit,
@@ -2168,14 +2169,14 @@ require('./routes/customer-license-trial')({ app, daysRemaining, genLicenseKey, 
 // Bind a device's hardware id to this account and start the 30-day OS trial.
 // Called by /flash just before flashing begins. Idempotent per (user, hardware).
 // ════ OS-flash trial (bind, status, admin-assist) — routes/flash.js ════
-require('./routes/flash')({ app, DAY_MS, TRIAL_DAYS, daysRemaining, db, encryptText, genLicenseKey, hwidHmac, log, notifyAdminForUser, recordTosAcceptance });
+require('./routes/flash')({ app, DAY_MS, TRIAL_DAYS, daysRemaining, db, encryptText, genLicenseKey, hwidHmac, hwidHmacCandidates, log, notifyAdminForUser, recordTosAcceptance });
 
 // ════ E-commerce pricing + RMA pipeline + catalog + orders — routes/commerce.js ════
 const { computePrice, rmaWindowState } = require('./helpers/price-rma')({ DAY_MS });
 require('./routes/commerce')({ app, DAY_MS, db, encryptBuffer, genRef, log, notifyAdminForUser,
   r2Put, recordTosAcceptance, shopStmts, computePrice, rmaWindowState, RETURN_WINDOW_DAYS: 14 });
 // ════ ADMIN — products / orders / RMA / trials — routes/admin-commerce.js ════
-require('./routes/admin-commerce')({ app, db, shopStmts, requireAdmin, CRYPTO_PLAN_PRICES, DAY_MS, PLAN_META, STRIPE_PLANS, computePrice, daysRemaining, decryptBuffer, decryptText, hwidHmac, log, notifyAdmin, r2Get, rmaWindowState });
+require('./routes/admin-commerce')({ app, db, shopStmts, requireAdmin, CRYPTO_PLAN_PRICES, DAY_MS, PLAN_META, STRIPE_PLANS, computePrice, daysRemaining, decryptBuffer, decryptText, hwidHmac, hwidHmacCandidates, log, notifyAdmin, r2Get, rmaWindowState });
 
 // ════ SUPPORT chat (admin ↔ buyer) + E2E keys + guest admin — routes/support.js ════
 require('./routes/support')({ app, db, decryptText, encryptText, getOrCreateThread, getSupportPresence,
@@ -2214,7 +2215,7 @@ app.use('/api/devices/:id', (req, res, next) => {
 // ── Permanent device↔account lock helpers ──────────────────────────────────
 const { normIdent } = require('./helpers/norm-ident')();
 
-const { checkTrialLineageAbuse } = require('./helpers/check-trial-lineage-abuse')({ db, decryptText, hwidHmac, log, normIdent, notifyAdmin });
+const { checkTrialLineageAbuse } = require('./helpers/check-trial-lineage-abuse')({ db, decryptText, hwidHmac, hwidHmacCandidates, log, normIdent, notifyAdmin });
 const { userIdentityEmail } = require('./helpers/user-identity-email')({ getNormIdent: (s) => normIdent(s) });
 
 const { deviceLockState, isDeviceLocked } = require('./helpers/device-lock-state')({ decryptText, normIdent, stmts });
@@ -2829,7 +2830,7 @@ const { audiorecCmdKey, setAudioRecActive, clearAudioRecActive } = require('./he
 // does not by itself, but still qualifies via an active trial if one is running.
 // ── User management (admin) + business mode + subusers — routes/user-management.js ──
 const { revokeUserSessions } = require('./helpers/revoke-user-sessions')({ log, redisClient, redisEnabled, db });
-require('./routes/user-management')({ app, AUTH_SCHEME_PREHASH, COMP_PLANS, COMP_PLAN_LABEL, bcrypt, businessModeQualifies, computeAuthPrehash, db, decryptText, encryptText, hwidHmac, log, looksLikeAuthHash, looksLikeAuthSalt, newAuthSalt, normIdent, notifyAdminForUser, notifyAdminLogin, requireAdmin, requireAuth, revokeUserSessions, signalAlert, speakeasy, stmts, trialInfo, verifyUserPassword });
+require('./routes/user-management')({ app, AUTH_SCHEME_PREHASH, COMP_PLANS, COMP_PLAN_LABEL, bcrypt, businessModeQualifies, computeAuthPrehash, db, decryptText, encryptText, hwidHmac, hwidHmacCandidates, log, looksLikeAuthHash, looksLikeAuthSalt, newAuthSalt, normIdent, notifyAdminForUser, notifyAdminLogin, requireAdmin, requireAuth, revokeUserSessions, signalAlert, speakeasy, stmts, trialInfo, verifyUserPassword });
 
 // ── Hybrid Managed: "Grant support access" (dedicated support delegate) ───────────────────
 // A single, revocable SentinelMDM-support identity per owner, created WITHOUT enabling Business

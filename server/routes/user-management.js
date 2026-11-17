@@ -1,4 +1,4 @@
-module.exports = ({ app, AUTH_SCHEME_PREHASH, COMP_PLANS, COMP_PLAN_LABEL, bcrypt, businessModeQualifies, computeAuthPrehash, db, decryptText, encryptText, hwidHmac, log, looksLikeAuthHash, looksLikeAuthSalt, newAuthSalt, normIdent, notifyAdminForUser, notifyAdminLogin, requireAdmin, requireAuth, revokeUserSessions, signalAlert, speakeasy, stmts, trialInfo, verifyUserPassword }) => {
+module.exports = ({ app, AUTH_SCHEME_PREHASH, COMP_PLANS, COMP_PLAN_LABEL, bcrypt, businessModeQualifies, computeAuthPrehash, db, decryptText, encryptText, hwidHmac, hwidHmacCandidates, log, looksLikeAuthHash, looksLikeAuthSalt, newAuthSalt, normIdent, notifyAdminForUser, notifyAdminLogin, requireAdmin, requireAuth, revokeUserSessions, signalAlert, speakeasy, stmts, trialInfo, verifyUserPassword }) => {
 app.get('/api/users', requireAdmin, async (_req, res) => {
   const users = (await stmts.allUsers.all()).map(u => ({
     ...u,
@@ -74,8 +74,12 @@ app.delete('/api/users/:id/comp-sub', requireAdmin, async (req, res) => {
   // be resurrected by wiping + re-registering the same email — the registration restore trusts the
   // stash, and an open-ended (NULL-expiry) comp would otherwise re-apply forever. Best-effort.
   try {
-    const eh = (() => { const em = normIdent(decryptText(target.email)); return em ? hwidHmac(em) : null; })();
-    if (eh) (await db.prepare('UPDATE account_continuity SET comp_plan=NULL, comp_expires_at=NULL WHERE email_hmac=?').run(eh));
+    const em  = normIdent(decryptText(target.email));
+    const ehs = em ? hwidHmacCandidates(em) : [];
+    if (ehs.length) {
+      const marks = ehs.map(() => '?').join(',');
+      (await db.prepare(`UPDATE account_continuity SET comp_plan=NULL, comp_expires_at=NULL WHERE email_hmac IN (${marks})`).run(...ehs));
+    }
   } catch (e) { log('warn', 'account_continuity comp clear failed', { userId: target.id, error: e.message }); }
   log('info', 'Complimentary subscription revoked', { userId: target.id, username: target.username, by: req.session.username });
   res.json({ ok: true });

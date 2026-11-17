@@ -10,7 +10,7 @@
 //
 // relative requires: none
 
-module.exports = ({ db, decryptText, hwidHmac, log, normIdent, notifyAdmin }) => {
+module.exports = ({ db, decryptText, hwidHmac, hwidHmacCandidates, log, normIdent, notifyAdmin }) => {
 // ── Free-trial-abuse lineage tracking ────────────────────────────────────────
 // The 30-day public trial is keyed to the USER ROW, not the person, so a fresh account = a fresh
 // 30 days by default. Two cheap re-trial vectors: (1) same physical device — device_id is derived
@@ -32,26 +32,41 @@ async function checkTrialLineageAbuse(userId, deviceId, hwId) {
   try {
     const urow = (await db.prepare('SELECT email FROM users WHERE id=?').get(userId));
     const email = urow ? normIdent(decryptText(urow.email)) : '';
-    const emailHmac  = email ? hwidHmac(email) : null;
-    const dev        = deviceId || null;
-    const serialHmac = (hwId && hwId.trim()) ? hwidHmac(hwId.trim()) : null;
+    const emailHmacs  = email ? hwidHmacCandidates(email) : [];
+    const dev         = deviceId || null;
+    const serialHmacs = (hwId && hwId.trim()) ? hwidHmacCandidates(hwId.trim()) : [];
+    const emailHmac   = emailHmacs[0] || null;
+    const serialHmac  = serialHmacs[0] || null;
 
-    const priors = (await db.prepare(
-      `SELECT user_id, device_id, email_hmac, serial_hmac FROM trial_starts
-       WHERE user_id <> ? AND ((device_id  IS NOT NULL AND device_id  = ?)
-                            OR (email_hmac  IS NOT NULL AND email_hmac  = ?)
-                            OR (serial_hmac IS NOT NULL AND serial_hmac = ?))`
-    ).all(userId, dev, emailHmac, serialHmac));
+    const where  = ['user_id <> ?'];
+    const params = [userId];
+    if (dev) { where.push('(device_id IS NOT NULL AND device_id = ?)'); params.push(dev); }
+    if (emailHmacs.length) {
+      where.push(`(email_hmac IS NOT NULL AND email_hmac IN (${emailHmacs.map(() => '?').join(',')}))`);
+      params.push(...emailHmacs);
+    }
+    if (serialHmacs.length) {
+      where.push(`(serial_hmac IS NOT NULL AND serial_hmac IN (${serialHmacs.map(() => '?').join(',')}))`);
+      params.push(...serialHmacs);
+    }
 
-    // Record THIS trial start regardless of outcome (append-only).
+    let priors = [];
+    if (dev || emailHmacs.length || serialHmacs.length) {
+      priors = (await db.prepare(
+        `SELECT user_id, device_id, email_hmac, serial_hmac FROM trial_starts
+         WHERE ${where.join(' OR ')}`
+      ).all(...params));
+    }
+
+    // Record THIS trial start regardless of outcome (append-only) with the current key.
     (await db.prepare(
       'INSERT INTO trial_starts (user_id, device_id, email_hmac, serial_hmac, created_at) VALUES (?,?,?,?,?)'
     ).run(userId, dev, emailHmac, serialHmac, Date.now()));
 
     if (!priors.length) return;
     const byDevice   = priors.filter(p => p.device_id   && p.device_id   === dev).length;
-    const byEmail    = priors.filter(p => p.email_hmac  && p.email_hmac  === emailHmac).length;
-    const byHardware = priors.filter(p => p.serial_hmac && p.serial_hmac === serialHmac).length;
+    const byEmail    = priors.filter(p => p.email_hmac  && emailHmacs.includes(p.email_hmac)).length;
+    const byHardware = priors.filter(p => p.serial_hmac && serialHmacs.includes(p.serial_hmac)).length;
     const otherAccts = [...new Set(priors.map(p => p.user_id))];
     const sig = [ byDevice ? 'same device (enforced — inherited original start)' : null,
                   byHardware ? 'same hwId (self-reported, alert-only)' : null,

@@ -3,7 +3,7 @@
 const speakeasy = require('speakeasy');
 module.exports = ({ app, AUTH_SCHEME_PREHASH, EMAIL_CODE_TTL_MS, PUBLIC_USER_DEFAULT_FEATURES,
                     QRCode, bcrypt, computeAuthPrehash, createDemoDeviceForUser, crypto,
-                    db, decryptText, encryptText, genEmailCode, genRef, hwidHmac, log,
+                    db, decryptText, encryptText, genEmailCode, genRef, hwidHmac, hwidHmacCandidates, log,
                     looksLikeAuthHash, looksLikeAuthSalt, makeChatRateLimit, makeRateLimit,
                     newAuthSalt, notifyAdminForUser, notifyPush, recordPolicyAcceptances,
                     recordTosAcceptance, sendApprovalEmail, sendAuthPage, sendEmailVerifyCode,
@@ -117,7 +117,11 @@ app.post('/api/register', registrationRateLimit, async (req, res) => {
   // does NOT reset to a fresh 30 days (also closes the trial-reset abuse hole), and any comp grant
   // carries over. Best-effort; never fails registration. (Stripe sub is handled by the re-link above.)
   try {
-    const cont = (await db.prepare('SELECT trial_started_at, comp_plan, comp_expires_at FROM account_continuity WHERE email_hmac=?').get(hwidHmac(email)));
+    let cont = null;
+    for (const emailHmac of hwidHmacCandidates(email)) {
+      cont = (await db.prepare('SELECT trial_started_at, comp_plan, comp_expires_at FROM account_continuity WHERE email_hmac=?').get(emailHmac));
+      if (cont) break;
+    }
     if (cont) {
       const sets = [], vals = [];
       if (cont.trial_started_at) { sets.push('trial_started_at=?'); vals.push(cont.trial_started_at); }
@@ -191,6 +195,32 @@ app.post('/api/register', registrationRateLimit, async (req, res) => {
 });
 
 // Step 1.5 — verify the emailed code (proves email ownership), then issue the TOTP QR.
+// Resume a pending registration after a page reload / mobile tab eviction. The session already
+// holds pendingRegistration, but without this the page always rendered step 1 again -- a reload
+// mid-verification looked like "registration didn't work", so users re-registered (new stub, new
+// code, another email) instead of entering the code already in their inbox. 2026-11-08: a mobile
+// user hit exactly that loop (2 stubs, 5 codes, 0 verify posts).
+app.get('/api/register/pending', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const pr = req.session?.pendingRegistration;
+  if (!pr?.userId) return res.json({ pending: false });
+  const user = await db.prepare('SELECT id, username, email, status, totp_secret FROM users WHERE id=?').get(pr.userId);
+  if (!user) { req.session.pendingRegistration = null; return res.json({ pending: false }); }
+  const email = decryptText(user.email) || '';
+  if (user.status === 'pending_email') {
+    return res.json({ pending: true, step: 'email', email });
+  }
+  if (user.status === 'pending_totp') {
+    const totpSecret = decryptText(user.totp_secret);
+    const otpauthUrl = speakeasy.otpauthURL({
+      secret: totpSecret, label: encodeURIComponent(`SentinelMDM:${user.username}`), issuer: 'SentinelMDM', encoding: 'base32',
+    });
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 200, margin: 1 });
+    return res.json({ pending: true, step: 'totp', email, otpauth: otpauthUrl, qr_data_url: qrDataUrl });
+  }
+  return res.json({ pending: false });
+});
+
 app.post('/api/register/verify-email', totpRateLimit, async (req, res) => {
   if (!req.session?.pendingRegistration)
     return res.status(400).json({ error: 'No pending registration session — please start from the beginning' });

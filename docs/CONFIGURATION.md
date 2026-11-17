@@ -64,7 +64,7 @@ variable of the same purpose. See `server/config.js`.
 | `SESSION_SECRET` | Session cookie signing secret. |
 | `ENC_PASSPHRASE` | Passphrase for application-level payload encryption. |
 | `SERVER_ENC_KEY_PEM` | Private key material for encrypted fields. |
-| `HWID_KEY` | Hardware-id derivation key. |
+| `HWID_KEY` | **Required** hardware-id HMAC key. There is no default. |
 | `TOTP_SECRET` | TOTP seed/encryption material. |
 | `WEBAUTHN_RP_ID` | WebAuthn relying-party id (hostname). |
 | `WEBAUTHN_ORIGIN` | WebAuthn origin. |
@@ -112,6 +112,7 @@ are only needed when migrating grandfathered subscribers.
 ### Integrations (optional)
 
 `TS_TAILNET`, `BASTION_INTERNAL_URL`, `BASTION_INTERNAL_KEY`, `SIGNAL_API_URL`,
+`SIGNAL_GROUP`, `SIGNAL_SECURITY_GROUP`, `SIGNAL_HYBRID_GROUP`,
 `NODERED_ALERT_URL`, `NODERED_GEOFENCE_URL`, `HONEYPOT_FEED_URL`, `PHISH_FEED_URL`,
 `OPENCODE_API_URL`, `OPENCODE_MODEL`, `OCID_API_KEY`, `WIGLE_API_KEY`,
 `STORAGE_QUOTA_BYTES`, `ANALYTICS_GEO_DISABLED`, `AI_LOG_PAYLOAD_MAX_CHARS`.

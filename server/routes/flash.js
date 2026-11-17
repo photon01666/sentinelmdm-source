@@ -1,6 +1,6 @@
 // routes/flash.js — OS-flash trial bind, status, admin-assist.
 // Extracted from server.js L3742-3818. 3 routes.
-module.exports = ({ app, DAY_MS, TRIAL_DAYS, daysRemaining, db, encryptText, genLicenseKey, hwidHmac, log, notifyAdminForUser, recordTosAcceptance }) => {
+module.exports = ({ app, DAY_MS, TRIAL_DAYS, daysRemaining, db, encryptText, genLicenseKey, hwidHmac, hwidHmacCandidates, log, notifyAdminForUser, recordTosAcceptance }) => {
 
 app.post('/api/flash/bind', async (req, res) => {
   if (req.session.account_type !== 'public')
@@ -11,13 +11,15 @@ app.post('/api/flash/bind', async (req, res) => {
 
   const userId  = req.session.userId;
   const hmac    = hwidHmac(serial);
+  const hashes  = hwidHmacCandidates(serial);
+  const marks   = hashes.map(() => '?').join(',');
   const now     = Date.now();
 
-  let ent = (await db.prepare("SELECT * FROM entitlements WHERE user_id=? AND hardware_id_hmac=? AND trial_type='os_flash_7'")
-              .get(userId, hmac));
+  let ent = (await db.prepare(`SELECT * FROM entitlements WHERE user_id=? AND hardware_id_hmac IN (${marks}) AND trial_type='os_flash_7'`)
+              .get(userId, ...hashes));
 
-  const otherOwner = (await db.prepare("SELECT user_id FROM entitlements WHERE hardware_id_hmac=? AND trial_type='os_flash_7' AND user_id<>?")
-                       .get(hmac, userId));
+  const otherOwner = (await db.prepare(`SELECT user_id FROM entitlements WHERE hardware_id_hmac IN (${marks}) AND trial_type='os_flash_7' AND user_id<>?`)
+                       .get(...hashes, userId));
   if (otherOwner)
     return res.status(409).json({ error: 'This device is already registered to another account.' });
 
